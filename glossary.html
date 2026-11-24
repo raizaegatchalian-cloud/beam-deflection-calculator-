@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms &amp; Visual Guide — BeamStudio 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    .glossary-wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 26px 24px 60px;
+    }
+    .glossary-hero {
+      background: var(--surface-card);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 24px;
+      box-shadow: var(--shadow-card);
+      padding: 26px 28px;
+      margin-bottom: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .glossary-hero h1 {
+      margin: 0 0 6px;
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .glossary-hero p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      max-width: 640px;
+      line-height: 1.55;
+    }
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .filter-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .filter-pill {
+      padding: 8px 14px;
+      border-radius: 99px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-card);
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-pill.active, .filter-pill:hover {
+      background: var(--wisteria);
+      color: var(--starlight);
+      border-color: var(--wisteria);
+    }
+    .search-box {
+      min-width: 240px;
+      max-width: 320px;
+      flex: 1;
+    }
+    .section-group {
+      margin-bottom: 28px;
+    }
+    .group-heading {
+      font-size: 1.05rem;
+      font-weight: 800;
+      margin: 0 0 4px;
+      color: var(--wisteria);
+    }
+    [data-theme="dark"] .group-heading { color: var(--aurora); }
+    .group-desc {
+      margin: 0 0 14px;
+      font-size: 0.83rem;
+      color: var(--text-secondary);
+    }
+    .visual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 14px;
+    }
+    .term-card {
+      background: var(--surface-card);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      box-shadow: var(--shadow-card);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform 0.18s ease;
+    }
+    .term-card:hover { transform: translateY(-2px); }
+    .term-visual {
+      height: 86px;
+      border-radius: 12px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border-subtle);
+      display: grid;
+      place-items: center;
+      padding: 8px;
+    }
+    .term-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .term-name {
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .term-symbol {
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 3px 9px;
+      border-radius: 99px;
+      background: rgba(142, 164, 196, 0.25);
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+    .term-def {
+      margin: 0;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .term-tip {
+      font-size: 0.75rem;
+      padding: 7px 10px;
+      border-radius: 9px;
+      background: rgba(110, 90, 136, 0.08);
+      color: var(--text-primary);
+      line-height: 1.45;
+    }
+    [data-theme="dark"] .term-tip { background: rgba(142, 164, 196, 0.12); }
+    .empty-search {
+      text-align: center;
+      padding: 36px;
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-cube" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">BeamStudio 3D</div>
+        <div class="brand-sub">Terms, Symbols &amp; Visual Guide</div>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <a class="btn-3d btn-3d-primary btn-sm" href="index.html" style="text-decoration:none;">
+        ← Back to Calculator
+      </a>
+      <button class="icon-btn" id="glossaryThemeBtn" type="button" title="Switch Starlight / Twilight Theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="glossary-wrap">
+    <section class="glossary-hero">
+      <div>
+        <h1>Guide to Symbols, Diagrams &amp; Terms</h1>
+        <p>
+          New to beam analysis or unfamiliar with some of the words and drawings in the calculator? Here is a simple, plain-English guide to every shape, arrow, chart, and engineering term you will see on the page.
+        </p>
+      </div>
+      <a class="btn-3d btn-3d-aurora btn-sm" href="index.html" style="text-decoration:none;">Open 3D Calculator →</a>
+    </section>
+
+    <!-- Search & Category Filters -->
+    <div class="filter-bar">
+      <div class="filter-pills" id="categoryPills">
+        <button class="filter-pill active" data-cat="all" type="button">All Topics</button>
+        <button class="filter-pill" data-cat="supports" type="button">Supports</button>
+        <button class="filter-pill" data-cat="loads" type="button">Loads &amp; Arrows</button>
+        <button class="filter-pill" data-cat="diagrams" type="button">Charts &amp; 3D Visuals</button>
+        <button class="filter-pill" data-cat="terms" type="button">Key Terms &amp; Units</button>
+        <button class="filter-pill" data-cat="methods" type="button">The 3 Methods</button>
+      </div>
+      <input class="input-3d search-box" id="termSearchInput" type="search" placeholder="Search a word, symbol, or chart..." />
+    </div>
+
+    <!-- 1. SUPPORT SYMBOLS -->
+    <section class="section-group" data-group="supports">
+      <h2 class="group-heading">1. Support Symbols (What Holds the Beam Up)</h2>
+      <p class="group-desc">These shapes appear beneath the 3D beam and in the 2D setup diagram to show how the beam is anchored.</p>
+      <div class="visual-grid">
+        <article class="term-card" data-cat="supports">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <line x1="20" y1="22" x2="120" y2="22" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <polygon points="70,25 54,48 86,48" fill="rgba(110,90,136,0.22)" stroke="#6e5a88" stroke-width="2.2"/>
+              <circle cx="70" cy="25" r="3.5" fill="#f3eef8" stroke="#6e5a88" stroke-width="2"/>
+              <line x1="44" y1="48" x2="96" y2="48" stroke="#6e5a88" stroke-width="2"/>
+              <line x1="52" y1="48" x2="47" y2="56" stroke="#6e5a88" stroke-width="1.6"/>
+              <line x1="64" y1="48" x2="59" y2="56" stroke="#6e5a88" stroke-width="1.6"/>
+              <line x1="76" y1="48" x2="71" y2="56" stroke="#6e5a88" stroke-width="1.6"/>
+              <line x1="88" y1="48" x2="83" y2="56" stroke="#6e5a88" stroke-width="1.6"/>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Pin Support</span>
+            <span class="term-symbol">Triangle</span>
+          </div>
+          <p class="term-def">Acts like a door hinge. It stops the beam from moving up, down, or sideways, but still lets the end tilt freely as the beam bends.</p>
+          <div class="term-tip"><strong>Result:</strong> Vertical deflection is 0 here, but slope (tilt) is allowed.</div>
+        </article>
+
+        <article class="term-card" data-cat="supports">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <line x1="20" y1="20" x2="120" y2="20" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <polygon points="70,23 55,42 85,42" fill="rgba(142,164,196,0.30)" stroke="#557cb3" stroke-width="2.2"/>
+              <circle cx="62" cy="48" r="4.5" fill="none" stroke="#557cb3" stroke-width="2"/>
+              <circle cx="78" cy="48" r="4.5" fill="none" stroke="#557cb3" stroke-width="2"/>
+              <line x1="44" y1="53" x2="96" y2="53" stroke="#557cb3" stroke-width="2"/>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Roller Support</span>
+            <span class="term-symbol">Triangle + Wheels</span>
+          </div>
+          <p class="term-def">Rests on rollers so the beam cannot sink downward, while allowing it to tilt and slide slightly sideways if it expands or contracts.</p>
+          <div class="term-tip"><strong>Result:</strong> Vertical deflection is 0, and it pushes straight up (or down).</div>
+        </article>
+
+        <article class="term-card" data-cat="supports">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <rect x="24" y="10" width="16" height="48" rx="3" fill="rgba(110,90,136,0.28)" stroke="#6e5a88" stroke-width="2"/>
+              <line x1="40" y1="10" x2="40" y2="58" stroke="#6e5a88" stroke-width="3"/>
+              <line x1="40" y1="34" x2="118" y2="34" stroke="#6e5a88" stroke-width="7" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Fixed Support</span>
+            <span class="term-symbol">Anchored Wall</span>
+          </div>
+          <p class="term-def">Tightly clamped into a rigid wall (like a diving board or balcony). It stops both movement and tilting completely.</p>
+          <div class="term-tip"><strong>Result:</strong> Both deflection and slope are 0 right at the wall.</div>
+        </article>
+
+        <article class="term-card" data-cat="supports">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <line x1="18" y1="34" x2="62" y2="34" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <line x1="78" y1="34" x2="122" y2="34" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <circle cx="70" cy="34" r="8" fill="#f3eef8" stroke="#557cb3" stroke-width="2.6"/>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Internal Hinge</span>
+            <span class="term-symbol">Circle Joint</span>
+          </div>
+          <p class="term-def">Appears inside the Mirror (Conjugate) Beam whenever the real beam has an interior support (like an overhanging beam).</p>
+          <div class="term-tip"><strong>Meaning:</strong> Mirror moment is 0 here — matching real deflection = 0 at that support.</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 2. LOAD SYMBOLS -->
+    <section class="section-group" data-group="loads">
+      <h2 class="group-heading">2. Load Arrows &amp; Forces (What Pushes on the Beam)</h2>
+      <p class="group-desc">These rose/violet arrows show external weights or twisting forces pushing on your beam.</p>
+      <div class="visual-grid">
+        <article class="term-card" data-cat="loads">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <line x1="20" y1="50" x2="120" y2="50" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <line x1="70" y1="10" x2="70" y2="41" stroke="#a65780" stroke-width="3"/>
+              <polygon points="70,45 63,34 77,34" fill="#a65780"/>
+              <text x="82" y="24" font-size="11" font-weight="800" fill="#a65780">P (kN)</text>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Point Load</span>
+            <span class="term-symbol">P (kN)</span>
+          </div>
+          <p class="term-def">A single concentrated weight pressing at one exact spot on the beam (like a heavy column or person standing at one point).</p>
+          <div class="term-tip"><strong>Sign:</strong> Positive (+) pushes downward ↓. Negative (−) pulls upward ↑.</div>
+        </article>
+
+        <article class="term-card" data-cat="loads">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <line x1="18" y1="50" x2="122" y2="50" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <rect x="28" y="16" width="84" height="29" fill="rgba(166,87,128,0.18)"/>
+              <line x1="28" y1="16" x2="112" y2="16" stroke="#a65780" stroke-width="2.2"/>
+              <g stroke="#a65780" stroke-width="2">
+                <line x1="34" y1="16" x2="34" y2="42"/><line x1="52" y1="16" x2="52" y2="42"/>
+                <line x1="70" y1="16" x2="70" y2="42"/><line x1="88" y1="16" x2="88" y2="42"/>
+                <line x1="106" y1="16" x2="106" y2="42"/>
+              </g>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Uniform Load (UDL)</span>
+            <span class="term-symbol">w (kN/m)</span>
+          </div>
+          <p class="term-def">Evenly spread weight across a stretch of the beam (like a brick wall, concrete slab, or snow resting uniformly from <i>a</i> to <i>b</i>).</p>
+          <div class="term-tip"><strong>Total weight:</strong> Intensity <i>w</i> multiplied by loaded length (<i>b − a</i>).</div>
+        </article>
+
+        <article class="term-card" data-cat="loads">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <line x1="18" y1="50" x2="122" y2="50" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <polygon points="28,45 112,45 112,14" fill="rgba(166,87,128,0.20)" stroke="#a65780" stroke-width="2"/>
+              <line x1="60" y1="33" x2="60" y2="44" stroke="#a65780" stroke-width="1.8"/>
+              <line x1="86" y1="24" x2="86" y2="44" stroke="#a65780" stroke-width="1.8"/>
+              <line x1="108" y1="16" x2="108" y2="44" stroke="#a65780" stroke-width="1.8"/>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Varying Load (UVL)</span>
+            <span class="term-symbol">w₁ → w₂</span>
+          </div>
+          <p class="term-def">A spread load that ramps smoothly from one intensity (<i>w₁</i>) to another (<i>w₂</i>), forming a triangle or trapezoid (like water or soil pressure).</p>
+          <div class="term-tip"><strong>Tip:</strong> Set <i>w₁ = 0</i> for a triangle growing to the right, or <i>w₂ = 0</i> to taper down.</div>
+        </article>
+
+        <article class="term-card" data-cat="loads">
+          <div class="term-visual">
+            <svg width="140" height="68" viewBox="0 0 140 68">
+              <line x1="20" y1="42" x2="120" y2="42" stroke="#6e5a88" stroke-width="6" stroke-linecap="round"/>
+              <path d="M 54 32 A 18 18 0 1 1 82 52" fill="none" stroke="#6e5a88" stroke-width="3"/>
+              <polygon points="52,35 51,24 61,29" fill="#6e5a88"/>
+              <text x="90" y="24" font-size="11" font-weight="800" fill="#6e5a88">M₀ ↺</text>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Applied Moment</span>
+            <span class="term-symbol">M₀ (kN·m)</span>
+          </div>
+          <p class="term-def">A pure twisting effort applied at a point on the beam (like turning a wrench bolted onto the beam).</p>
+          <div class="term-tip"><strong>Sign:</strong> Positive (+) twists counterclockwise ↺. Negative (−) twists clockwise ↻.</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 3. CHARTS & 3D VISUALS -->
+    <section class="section-group" data-group="diagrams">
+      <h2 class="group-heading">3. Understanding the 3D Beam &amp; Diagrams</h2>
+      <p class="group-desc">What the visual overlays, colors, and charts on the calculator actually show.</p>
+      <div class="visual-grid">
+        <article class="term-card" data-cat="diagrams">
+          <div class="term-visual">
+            <svg width="150" height="68" viewBox="0 0 150 68">
+              <line x1="16" y1="22" x2="134" y2="22" stroke="#8ea4c4" stroke-width="2" stroke-dasharray="5,4"/>
+              <path d="M 16 22 Q 75 62 134 22" fill="none" stroke="#6e5a88" stroke-width="5" stroke-linecap="round"/>
+              <line x1="75" y1="22" x2="75" y2="41" stroke="#a65780" stroke-width="2"/>
+              <text x="82" y="36" font-size="11" font-weight="800" fill="#a65780">δ (sag)</text>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Ghost Outline &amp; Bend Scale</span>
+            <span class="term-symbol">3D Stage</span>
+          </div>
+          <p class="term-def">The faint wireframe shows where the beam starts when flat. Real steel beams bend only a few millimeters, so <b>Bend Scale</b> exaggerates the bend visually so you can clearly see the curve.</p>
+          <div class="term-tip"><strong>Tip:</strong> Keep Bend Scale around <b>1.0×</b> (setting it to 0.0× hides the visual curve).</div>
+        </article>
+
+        <article class="term-card" data-cat="diagrams">
+          <div class="term-visual">
+            <svg width="150" height="68" viewBox="0 0 150 68">
+              <defs>
+                <linearGradient id="gMap" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%" stop-color="#a65780"/>
+                  <stop offset="50%" stop-color="#f3eef8"/>
+                  <stop offset="100%" stop-color="#557cb3"/>
+                </linearGradient>
+              </defs>
+              <rect x="16" y="20" width="118" height="18" rx="9" fill="url(#gMap)" stroke="#6e5a88" stroke-width="1.2"/>
+              <text x="16" y="54" font-size="10" font-weight="700" fill="#a65780">Negative (−)</text>
+              <text x="92" y="54" font-size="10" font-weight="700" fill="#557cb3">Positive (+)</text>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">3D Color Map</span>
+            <span class="term-symbol">Heatmap</span>
+          </div>
+          <p class="term-def">Colors the 3D beam by intensity. For Bending Moment, <b>Aurora Blue</b> marks sagging ("smiling") zones while <b>Mauve/Wisteria</b> marks hogging ("frowning") zones.</p>
+          <div class="term-tip"><strong>Tip:</strong> Switch to <b>Clean Opaline</b> if you prefer a neutral metallic look.</div>
+        </article>
+
+        <article class="term-card" data-cat="diagrams">
+          <div class="term-visual">
+            <svg width="150" height="68" viewBox="0 0 150 68">
+              <line x1="16" y1="36" x2="134" y2="36" stroke="#6e5a88" stroke-width="1.5"/>
+              <polygon points="16,36 16,14 75,14 75,58 134,58 134,36" fill="rgba(142,164,196,0.32)" stroke="#557cb3" stroke-width="2.2"/>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Shear Force Chart (SFD)</span>
+            <span class="term-symbol">V(x)</span>
+          </div>
+          <p class="term-def">Shows the internal up-and-down slicing force at every point along the beam. Sudden vertical jumps happen right where a Point Load or Support acts.</p>
+          <div class="term-tip"><strong>Shortcut:</strong> Where Shear crosses zero is usually where Bending Moment peaks!</div>
+        </article>
+
+        <article class="term-card" data-cat="diagrams">
+          <div class="term-visual">
+            <svg width="150" height="68" viewBox="0 0 150 68">
+              <line x1="16" y1="50" x2="134" y2="50" stroke="#6e5a88" stroke-width="1.5"/>
+              <path d="M 16 50 Q 75 4 134 50 Z" fill="rgba(110,90,136,0.24)" stroke="#6e5a88" stroke-width="2.2"/>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Bending Moment Chart (BMD)</span>
+            <span class="term-symbol">M(x)</span>
+          </div>
+          <p class="term-def">Shows how hard the beam is trying to bend at every spot. The tallest peak is the most stressed location along the span.</p>
+          <div class="term-tip"><strong>Sign:</strong> Above zero = sagging ("smile"). Below zero = hogging ("frown").</div>
+        </article>
+
+        <article class="term-card" data-cat="diagrams">
+          <div class="term-visual">
+            <svg width="150" height="68" viewBox="0 0 150 68">
+              <line x1="16" y1="48" x2="134" y2="48" stroke="#6e5a88" stroke-width="1.5"/>
+              <polygon points="16,48 75,14 75,48" fill="rgba(85,124,179,0.28)" stroke="#6e5a88" stroke-width="1.8"/>
+              <polygon points="75,48 75,14 134,48" fill="rgba(142,164,196,0.34)" stroke="#6e5a88" stroke-width="1.8"/>
+              <circle cx="55" cy="36" r="4" fill="#6e5a88"/>
+              <circle cx="95" cy="36" r="4" fill="#6e5a88"/>
+              <text x="48" y="25" font-size="10" font-weight="800" fill="#241b35">A₁</text>
+              <text x="90" y="25" font-size="10" font-weight="800" fill="#241b35">A₂</text>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Bending Areas &amp; Balance Points</span>
+            <span class="term-symbol">M/EI &amp; x̄</span>
+          </div>
+          <p class="term-def">Used in the Moment-Area method. It splits the bending curve into clean shaded shapes (<i>A₁, A₂…</i>) and marks each shape's balance point (centroid dot <b>x̄</b>).</p>
+          <div class="term-tip"><strong>Why it matters:</strong> Shaded areas give change in tilt; areas × distance give bend!</div>
+        </article>
+
+        <article class="term-card" data-cat="diagrams">
+          <div class="term-visual">
+            <svg width="150" height="68" viewBox="0 0 150 68">
+              <line x1="16" y1="18" x2="134" y2="18" stroke="#6e5a88" stroke-width="1.4"/>
+              <line x1="16" y1="18" x2="134" y2="54" stroke="#557cb3" stroke-width="2" stroke-dasharray="5,4"/>
+              <path d="M 16 18 Q 75 56 134 18" fill="none" stroke="#6e5a88" stroke-width="2.6"/>
+              <line x1="134" y1="52" x2="134" y2="21" stroke="#a65780" stroke-width="2.2"/>
+              <text x="112" y="42" font-size="11" font-weight="800" fill="#a65780">t</text>
+            </svg>
+          </div>
+          <div class="term-head">
+            <span class="term-name">Bent Beam vs. Reference Line</span>
+            <span class="term-symbol">Deviation t</span>
+          </div>
+          <p class="term-def">Draws a straight dashed tangent line touching the bent beam at one reference support. The vertical gap <b>t</b> between that straight line and the curve is called the <b>tangential deviation</b>.</p>
+          <div class="term-tip"><strong>Shortcut:</strong> Dividing that gap <i>t</i> by the span gives the support's starting tilt!</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 4. KEY TERMS & UNITS -->
+    <section class="section-group" data-group="terms">
+      <h2 class="group-heading">4. Key Engineering Words &amp; Units</h2>
+      <p class="group-desc">Plain-English definitions of every number and symbol shown in the sidebar and results bar.</p>
+      <div class="visual-grid">
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Deflection</span>
+            <span class="term-symbol">δ or y (mm, cm, m)</span>
+          </div>
+          <p class="term-def">How far a point on the beam moves vertically from its original straight line under load. Negative (−) means downward sag; positive (+) means upward lift.</p>
+        </article>
+
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Slope (Tilt)</span>
+            <span class="term-symbol">θ (rad / mrad)</span>
+          </div>
+          <p class="term-def">The tilt angle of the bent beam at any spot. 1 mrad = 0.001 radians (about 0.057 degrees). Where slope equals 0 is usually where the beam sags the deepest.</p>
+        </article>
+
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Support Reactions</span>
+            <span class="term-symbol">R_A, R_B, M_A</span>
+          </div>
+          <p class="term-def">The invisible upward/downward push-back forces (and wall twisting moments) that the supports supply to keep the beam standing still in balance.</p>
+        </article>
+
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Young’s Modulus</span>
+            <span class="term-symbol">E (GPa)</span>
+          </div>
+          <p class="term-def">Measures how stiff the <b>material</b> is. Steel (~200 GPa) bends much less than Aluminum (~69 GPa) or Timber (~11 GPa) of the exact same size.</p>
+        </article>
+
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Moment of Inertia</span>
+            <span class="term-symbol">I (m⁴, cm⁴, mm⁴)</span>
+          </div>
+          <p class="term-def">Measures how stiff the <b>cross-section shape</b> is against bending. A ruler laid flat bends easily (small <i>I</i>), while the same ruler turned on its edge is very stiff (large <i>I</i>).</p>
+          <div class="term-tip"><strong>Unit tip:</strong> 1 m⁴ = 10⁸ cm⁴ = 10¹² mm⁴. Always match the unit dropdown to your problem!</div>
+        </article>
+
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Flexural Rigidity &amp; Constant EI</span>
+            <span class="term-symbol">EI (kN·m²)</span>
+          </div>
+          <p class="term-def">Combined bending stiffness (<i>E × I</i>). If a homework problem doesn't give numbers for <i>E</i> and <i>I</i> and says "assume EI is constant", check <b>Treat EI as Constant</b> to see answers cleanly in terms of <b>/EI</b>.</p>
+        </article>
+
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Span Ratio</span>
+            <span class="term-symbol">L / δ</span>
+          </div>
+          <p class="term-def">Compares beam length to how much it sags (e.g., <i>L/360</i> means the sag is 1/360th of the beam's length). Building codes use limits like L/360 or L/240 so floors don't feel bouncy.</p>
+        </article>
+
+        <article class="term-card" data-cat="terms">
+          <div class="term-head">
+            <span class="term-name">Centroid</span>
+            <span class="term-symbol">x̄ (m)</span>
+          </div>
+          <p class="term-def">The exact horizontal balance point (center of area) of a shaded shape on the bending diagram, measured from the left end of the beam.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 5. THE 3 ANALYSIS METHODS -->
+    <section class="section-group" data-group="methods">
+      <h2 class="group-heading">5. The 3 Calculation Methods Explained Simply</h2>
+      <p class="group-desc">All three methods give the exact same final deflection — they just take different routes to get there.</p>
+      <div class="visual-grid">
+        <article class="term-card" data-cat="methods">
+          <div class="term-head">
+            <span class="term-name">1. Double Integration</span>
+            <span class="term-symbol">Calculus Route</span>
+          </div>
+          <p class="term-def">Writes a formula for the Bending Moment <i>M(x)</i>, integrates it once to get beam tilt (slope), integrates a second time to get beam bend (deflection), and uses the support positions to find the exact numbers.</p>
+          <div class="term-tip"><strong>Best for:</strong> Getting exact formulas valid at every point along the beam.</div>
+        </article>
+
+        <article class="term-card" data-cat="methods">
+          <div class="term-head">
+            <span class="term-name">2. Moment-Area Method</span>
+            <span class="term-symbol">Geometry Route</span>
+          </div>
+          <p class="term-def">Uses the geometry of the <i>M/EI</i> diagram instead of heavy calculus: the shaded area between two points gives the change in tilt, and the area multiplied by its balance distance gives the bend offset.</p>
+          <div class="term-tip"><strong>Best for:</strong> Quickly finding slope or deflection at a single target spot.</div>
+        </article>
+
+        <article class="term-card" data-cat="methods">
+          <div class="term-head">
+            <span class="term-name">3. Conjugate Beam Method</span>
+            <span class="term-symbol">Mirror-Beam Route</span>
+          </div>
+          <p class="term-def">Builds an imaginary "mirror" beam of the same length with swapped supports (Fixed ↔ Free, Interior Support ↔ Hinge) and loads it with the <i>M/EI</i> diagram. Solving normal shear and moment on this mirror beam directly gives real slope and real deflection!</p>
+          <div class="term-tip"><strong>Best for:</strong> Overhanging beams and beams with changing stiffness.</div>
+        </article>
+      </div>
+    </section>
+
+    <div class="empty-search hidden" id="emptySearchMsg">No matching terms found. Try another keyword like "pin", "UDL", "slope", or "EI".</div>
+  </main>
+
+  <script>
+    (function () {
+      const themeBtn = document.getElementById('glossaryThemeBtn');
+      let dark = false;
+      try {
+        dark = localStorage.getItem('beamstudio_theme') === 'dark';
+        if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (_) {}
+
+      themeBtn.addEventListener('click', () => {
+        dark = !dark;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        try { localStorage.setItem('beamstudio_theme', dark ? 'dark' : 'light'); } catch (_) {}
+      });
+
+      const pills = document.querySelectorAll('#categoryPills .filter-pill');
+      const searchInput = document.getElementById('termSearchInput');
+      const groups = document.querySelectorAll('.section-group');
+      const cards = document.querySelectorAll('.term-card');
+      const emptyMsg = document.getElementById('emptySearchMsg');
+      let activeCat = 'all';
+
+      function applyFilter() {
+        const q = searchInput.value.trim().toLowerCase();
+        let visibleCount = 0;
+
+        cards.forEach((card) => {
+          const catMatch = activeCat === 'all' || card.dataset.cat === activeCat;
+          const textMatch = !q || card.textContent.toLowerCase().includes(q);
+          const show = catMatch && textMatch;
+          card.classList.toggle('hidden', !show);
+          if (show) visibleCount++;
+        });
+
+        groups.forEach((grp) => {
+          const hasVisible = grp.querySelectorAll('.term-card:not(.hidden)').length > 0;
+          grp.classList.toggle('hidden', !hasVisible);
+        });
+
+        emptyMsg.classList.toggle('hidden', visibleCount > 0);
+      }
+
+      pills.forEach((p) => {
+        p.addEventListener('click', () => {
+          pills.forEach((b) => b.classList.remove('active'));
+          p.classList.add('active');
+          activeCat = p.dataset.cat;
+          applyFilter();
+        });
+      });
+
+      searchInput.addEventListener('input', applyFilter);
+    })();
+  </script>
+</body>
+</html>

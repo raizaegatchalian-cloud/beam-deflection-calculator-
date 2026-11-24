@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BeamStudio 3D — Interactive Beam Deflection, Shear &amp; Moment Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- =========================================================
+       CLEAN TOP NAVIGATION BAR
+       ========================================================= -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-cube" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">BeamStudio 3D</div>
+        <div class="brand-sub">Beam Deflection, Shear &amp; Moment Calculator</div>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <a class="ai-status-btn" href="glossary.html" style="text-decoration:none;" title="Plain-English definitions of terms, symbols &amp; diagrams">
+        <span>📖 Terms &amp; Guide</span>
+      </a>
+
+      <button class="ai-status-btn" id="openAiModalBtn" type="button">
+        <span class="status-led" id="aiStatusLed"></span>
+        <span id="aiStatusText">Connect AI Key</span>
+      </button>
+
+      <button class="icon-btn" id="openGuideBtn" type="button" title="Quick-Start Guide &amp; Sign Conventions">?</button>
+
+      <button class="icon-btn" id="printReportBtn" type="button" title="Print / Save as PDF">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 6 2 18 2 18 9"/>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+          <rect x="6" y="14" width="12" height="8"/>
+        </svg>
+      </button>
+
+      <button class="icon-btn" id="themeToggleBtn" type="button" title="Switch Starlight / Twilight Theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- GENTLE FIRST-TIME WELCOME TIP -->
+  <div class="welcome-banner" id="welcomeBanner">
+    <div>
+      <strong>New here?</strong> Start on the left with <strong>Step 1 → Step 2 → Step 3</strong> (or pick a ready-made example). Unfamiliar with any symbol or chart? Open the <a href="glossary.html" style="color:var(--wisteria); font-weight:800;">Terms &amp; Visual Guide →</a>
+    </div>
+    <button class="banner-close" id="dismissBannerBtn" type="button" title="Dismiss tip">Got it ✕</button>
+  </div>
+
+  <!-- =========================================================
+       MAIN TWO-COLUMN WORKSPACE
+       ========================================================= -->
+  <main class="workspace">
+    <!-- LEFT GUIDED SETUP SIDEBAR -->
+    <aside class="sidebar">
+      <!-- Quick Example Loader -->
+      <div class="setup-step" style="padding:13px 16px;">
+        <div class="form-group">
+          <label for="presetSelect">Load a Ready-Made Example</label>
+          <select class="select-3d" id="presetSelect">
+            <option value="">Choose an example beam...</option>
+            <option value="ss_point">Simply Supported + Midspan Point Load</option>
+            <option value="ss_combined">Simply Supported + UDL, Point &amp; Moment</option>
+            <option value="cantilever_uvl">Cantilever + Triangular UVL &amp; Tip Load</option>
+            <option value="overhang">Overhanging Beam + Combined Loads</option>
+            <option value="fixed_fixed">Fixed-Fixed Beam (Indeterminate)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- STEP 1: BEAM & SUPPORTS -->
+      <section class="setup-step">
+        <div class="step-heading">
+          <div class="step-heading-left">
+            <span class="step-num">1</span>
+            <span class="step-heading-title">Beam &amp; Supports</span>
+          </div>
+        </div>
+        <div class="step-helper">Set your span length and how the beam is supported.</div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="beamLength">Length L (m)</label>
+            <input class="input-3d" id="beamLength" type="number" step="0.1" min="0.2" value="6" />
+          </div>
+          <div class="form-group">
+            <label for="materialPreset">Material / Stiffness</label>
+            <select class="select-3d" id="materialPreset">
+              <option value="200">Steel (200 GPa)</option>
+              <option value="69">Aluminum (69 GPa)</option>
+              <option value="28">Concrete (28 GPa)</option>
+              <option value="11">Timber (11 GPa)</option>
+              <option value="constant_ei">Constant EI (Symbolic)</option>
+              <option value="custom">Custom E...</option>
+            </select>
+          </div>
+
+          <div class="form-group span-2">
+            <label class="const-ei-toggle" for="constantEICheckbox">
+              <input id="constantEICheckbox" type="checkbox" />
+              <span>Treat <strong>EI as Constant</strong> (express slope &amp; deflection in terms of <code>/EI</code>)</span>
+            </label>
+          </div>
+
+          <div class="form-group span-2">
+            <label for="supportType">Support Condition</label>
+            <select class="select-3d" id="supportType">
+              <option value="simply_supported">Simply Supported (Pin &amp; Roller)</option>
+              <option value="cantilever_left">Cantilever — Fixed at Left</option>
+              <option value="cantilever_right">Cantilever — Fixed at Right</option>
+              <option value="overhanging">Overhanging (Custom Supports)</option>
+              <option value="propped_cantilever">Propped Cantilever (Fixed + Roller)</option>
+              <option value="fixed_fixed">Fixed-Fixed (Both Ends Fixed)</option>
+            </select>
+          </div>
+
+          <div class="form-group hidden" id="overhangAGroup">
+            <label for="supportAX">Pin Position x_A (m)</label>
+            <input class="input-3d" id="supportAX" type="number" step="0.1" min="0" value="0" />
+          </div>
+          <div class="form-group hidden" id="overhangBGroup">
+            <label for="supportBX">Roller Position x_B (m)</label>
+            <input class="input-3d" id="supportBX" type="number" step="0.1" min="0.1" value="4.5" />
+          </div>
+        </div>
+
+        <!-- Collapsible Section & Stiffness (Progressive Disclosure) -->
+        <details class="disclosure" id="sectionDisclosure">
+          <summary>
+            <span>Cross-Section &amp; Stiffness (E, I)</span>
+            <span class="summary-meta" id="sectionSummaryMeta">I-Beam ▾</span>
+          </summary>
+          <div class="disclosure-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="youngsE">Modulus E (GPa)</label>
+                <input class="input-3d" id="youngsE" type="number" step="1" min="0.1" value="200" />
+              </div>
+              <div class="form-group">
+                <label for="queryXInput">Check Point x_q (m)</label>
+                <input class="input-3d" id="queryXInput" type="number" step="0.1" min="0" value="3" />
+              </div>
+              <div class="form-group span-2">
+                <label for="sectionType">3D Cross-Section Shape</label>
+                <select class="select-3d" id="sectionType">
+                  <option value="ibeam">I-Beam (W-Section)</option>
+                  <option value="rect">Rectangular Beam</option>
+                  <option value="tube">Circular / Hollow Tube</option>
+                  <option value="tbeam">T-Beam Section</option>
+                  <option value="custom">Custom I Value (m⁴ / cm⁴ / mm⁴ / in⁴)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="sectionDimsContainer" class="form-grid" style="margin-top:9px;"></div>
+
+            <div class="section-mini-badge">
+              <span id="computedILabel">I = 8.87×10⁻⁵ m⁴</span>
+              <span id="computedEILabel">EI = 17,742 kN·m²</span>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- STEP 2: APPLIED LOADS -->
+      <section class="setup-step">
+        <div class="step-heading">
+          <div class="step-heading-left">
+            <span class="step-num">2</span>
+            <span class="step-heading-title">Applied Loads</span>
+          </div>
+          <button class="link-btn" id="clearLoadsBtn" type="button">Clear all</button>
+        </div>
+        <div class="step-helper">Positive forces push downward (↓). Add one or more loads.</div>
+
+        <div class="load-type-tabs" id="loadTypeTabs">
+          <button class="load-type-btn active" data-load-type="Point" type="button">Point</button>
+          <button class="load-type-btn" data-load-type="UDL" type="button">UDL</button>
+          <button class="load-type-btn" data-load-type="UVL" type="button">UVL</button>
+          <button class="load-type-btn" data-load-type="Moment" type="button">Moment</button>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="loadMag" id="loadMagLabel">Force P (kN, ↓+)</label>
+            <input class="input-3d" id="loadMag" type="number" step="1" value="25" />
+          </div>
+          <div class="form-group">
+            <label for="loadA" id="loadALabel">Position a (m)</label>
+            <input class="input-3d" id="loadA" type="number" step="0.1" value="3" />
+          </div>
+          <div class="form-group hidden" id="loadBGroup">
+            <label for="loadB">End Position b (m)</label>
+            <input class="input-3d" id="loadB" type="number" step="0.1" value="6" />
+          </div>
+          <div class="form-group hidden" id="loadW2Group">
+            <label for="loadW2">End Intensity w₂ (kN/m)</label>
+            <input class="input-3d" id="loadW2" type="number" step="1" value="15" />
+          </div>
+        </div>
+
+        <button class="btn-3d btn-3d-ghost btn-full btn-sm" id="addLoadBtn" type="button" style="margin-top:11px;">
+          ＋ Add Load to Beam
+        </button>
+
+        <div class="loads-list" id="loadsList"></div>
+      </section>
+
+      <!-- STEP 3: ANALYSIS METHOD -->
+      <section class="setup-step">
+        <div class="step-heading">
+          <div class="step-heading-left">
+            <span class="step-num">3</span>
+            <span class="step-heading-title">Analysis Method</span>
+          </div>
+        </div>
+        <div class="step-helper">Choose which structural method’s diagrams &amp; solution to view.</div>
+
+        <div class="method-radio-list" id="methodRadioList">
+          <button class="method-radio active" data-method="double_integration" type="button">
+            <div>
+              <div class="method-radio-title">Double Integration Method</div>
+              <div class="method-radio-sub">Shear, Moment &amp; EI·y″ = M(x) equations</div>
+            </div>
+          </button>
+          <button class="method-radio" data-method="moment_area" type="button">
+            <div>
+              <div class="method-radio-title">Moment-Area Method</div>
+              <div class="method-radio-sub">M/EI areas, centroids x̄ &amp; tangent deviations</div>
+            </div>
+          </button>
+          <button class="method-radio" data-method="conjugate_beam" type="button">
+            <div>
+              <div class="method-radio-title">Conjugate Beam Method</div>
+              <div class="method-radio-sub">Transformed supports, V* = θ &amp; M* = y</div>
+            </div>
+          </button>
+          <button class="method-radio" data-method="compare" type="button">
+            <div>
+              <div class="method-radio-title">Compare All 3 Methods</div>
+              <div class="method-radio-sub">Overlaid curves &amp; convergence table</div>
+            </div>
+          </button>
+        </div>
+
+        <button class="btn-3d btn-3d-primary btn-full" id="calculateBtn" type="button" style="margin-top:14px;">
+          Calculate Beam
+        </button>
+      </section>
+    </aside>
+
+    <!-- RIGHT MAIN STAGE -->
+    <div class="main-stage">
+      <!-- HERO 3D VIEWPORT + UNIFIED RESULTS STRIP -->
+      <section class="card-3d viewport-card">
+        <div class="viewport-header">
+          <div class="pill-group" id="view3dModeGroup" title="Switch what the 3D scene visualizes">
+            <button class="pill-btn active" data-view3d="real" type="button">3D Beam</button>
+            <button class="pill-btn" data-view3d="moment_area" type="button">Moment-Area 3D</button>
+            <button class="pill-btn" data-view3d="conjugate" type="button">Conjugate 3D</button>
+          </div>
+
+          <div class="viewport-controls-right">
+            <select class="compact-select" id="colorMapSelect" title="3D surface coloring">
+              <option value="moment">Color: Bending Moment</option>
+              <option value="deflection">Color: Deflection</option>
+              <option value="shear">Color: Shear Force</option>
+              <option value="metallic">Color: Clean Opaline</option>
+            </select>
+
+            <select class="compact-select" id="cameraPresetSelect" title="Camera angle">
+              <option value="iso">View: 3D Isometric</option>
+              <option value="front">View: Front Elevation</option>
+              <option value="top">View: Top Plan</option>
+              <option value="section">View: Cross-Section</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="stage-3d-wrapper">
+          <div class="stage-3d-canvas" id="viewer3dContainer"></div>
+          <div class="stage-hint">Drag to rotate · Right-drag to pan · Scroll to zoom</div>
+
+          <div class="stage-hud-bottom">
+            <div class="hud-pill">
+              <span>Bend Scale</span>
+              <input id="exaggerationSlider" type="range" min="0" max="2.4" step="0.05" value="1.0" />
+              <span id="exaggerationVal">1.0×</span>
+            </div>
+
+            <div class="hud-pill">
+              <button class="pill-btn" id="animateFlexBtn" type="button">▶ Animate</button>
+              <button class="pill-btn" id="autoOrbitBtn" type="button">↻ Orbit</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Unified Key Results Strip (Directly Tied to the 3D Beam) -->
+        <div class="summary-strip">
+          <div class="summary-cell">
+            <div class="summary-label-row">
+              <span class="summary-label">Max Deflection</span>
+              <div class="unit-pills" id="deflUnitPills" title="Deflection display unit">
+                <button class="unit-pill active" data-defl-unit="mm" type="button">mm</button>
+                <button class="unit-pill" data-defl-unit="cm" type="button">cm</button>
+                <button class="unit-pill" data-defl-unit="m" type="button">m</button>
+              </div>
+              <span class="unit-ei-tag hidden" id="deflEiTag">/ EI</span>
+            </div>
+            <div class="summary-value highlight" id="kpiDefl">—</div>
+            <div class="summary-sub" id="kpiDeflSub">Location &amp; span ratio</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Max Bending Moment</div>
+            <div class="summary-value" id="kpiMoment">—</div>
+            <div class="summary-sub" id="kpiMomentSub">Peak section</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Max Shear Force</div>
+            <div class="summary-value" id="kpiShear">—</div>
+            <div class="summary-sub" id="kpiShearSub">Peak section</div>
+          </div>
+          <div class="summary-cell">
+            <div class="summary-label">Support Reactions</div>
+            <div class="summary-value" id="kpiReactions" style="font-size:0.98rem; line-height:1.3;">—</div>
+            <div class="summary-sub" id="kpiReactionsSub">Static equilibrium</div>
+          </div>
+        </div>
+
+        <!-- Synchronized Section-Cut Inspector -->
+        <div class="probe-banner">
+          <div style="display:flex; align-items:center; gap:10px; flex:1 1 200px;">
+            <span>Inspect Point x:</span>
+            <input id="sectionProbeSlider" type="range" min="0" max="6" step="0.02" value="3" style="flex:1; accent-color:var(--wisteria);" />
+            <span id="probeXVal" style="min-width:52px;">3.00 m</span>
+          </div>
+          <div class="probe-metrics" id="probeMetrics">
+            <span>V: <b>0.00 kN</b></span>
+            <span>M: <b>0.00 kN·m</b></span>
+            <span>θ: <b>0.00 mrad</b></span>
+            <span>δ: <b>0.00 mm</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CALM 3-TAB WORKSPACE SWITCHER (Show ONE Focused Area at a Time!) -->
+      <nav class="workspace-tabs no-print" id="workspaceTabs">
+        <div class="workspace-tab-group">
+          <button class="ws-tab active" data-ws-tab="diagrams" type="button">
+            <span>Diagrams</span>
+            <span class="diagram-tag" id="activeMethodPill" style="background:rgba(243,238,248,0.22); color:inherit;">Double Integration</span>
+          </button>
+          <button class="ws-tab" data-ws-tab="solution" type="button">
+            <span>Step-by-Step Solution</span>
+          </button>
+          <button class="ws-tab" data-ws-tab="ai" type="button">
+            <span>✦ AI Solver &amp; Tutor</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- TAB PANEL 1: DIAGRAMS -->
+      <section id="panelDiagrams">
+        <div class="diagrams-grid" id="diagramsGrid"></div>
+      </section>
+
+      <!-- TAB PANEL 2: STEP-BY-STEP SOLUTION -->
+      <section class="card-3d hidden" id="panelSolution">
+        <div class="solution-top-bar">
+          <div>
+            <div class="section-title" id="solutionCardTitle">Step-by-Step Solution — Double Integration Method</div>
+            <div class="section-sub">Exact analytical equations derived for your current beam configuration.</div>
+          </div>
+          <button class="btn-3d btn-3d-aurora btn-sm no-print" id="jumpToAiBtn" type="button">
+            ✦ Explain or Verify with AI
+          </button>
+        </div>
+        <div id="builtInSolutionContainer"></div>
+      </section>
+
+      <!-- TAB PANEL 3: AI SOLVER & TUTOR -->
+      <section class="card-3d hidden" id="panelAi">
+        <div class="ai-hero-bar">
+          <div>
+            <div class="section-title">AI Model Derivation &amp; Accuracy Cross-Check</div>
+            <div class="section-sub">
+              Use your own API key (Gemini, OpenAI, Claude, OpenRouter, DeepSeek, Groq, or Ollama) to generate detailed derivations or independently cross-check deflection values.
+            </div>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button class="btn-3d btn-3d-primary btn-sm" id="aiVerifiedBtn" type="button">✦ Generate AI Step-by-Step</button>
+            <button class="btn-3d btn-3d-aurora btn-sm" id="aiIndependentBtn" type="button">✓ Independent Cross-Check</button>
+            <button class="btn-3d btn-3d-ghost btn-sm" id="aiSettingsInlineBtn" type="button">API Key Settings</button>
+          </div>
+        </div>
+
+        <div class="ai-solution-box hidden" id="aiSolutionBox">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+            <div style="font-weight:800; font-size:0.9rem; display:flex; align-items:center; gap:8px;">
+              <span>✦ AI Model Output</span>
+              <span class="diagram-tag" id="aiModelStamp">Model</span>
+            </div>
+            <button class="link-btn" id="clearAiOutputBtn" type="button">Clear output</button>
+          </div>
+          <div id="aiVerifyBanner"></div>
+          <div class="ai-markdown-body" id="aiMarkdownOutput"></div>
+        </div>
+
+        <div>
+          <div class="section-title" style="font-size:0.9rem; margin-bottom:8px;">Ask the AI Structural Tutor</div>
+          <div class="starter-chips" id="tutorStarterChips">
+            <button class="starter-chip" type="button">Explain how max deflection was found</button>
+            <button class="starter-chip" type="button">Why is the deflection value negative?</button>
+            <button class="starter-chip" type="button">How do the 3 methods differ on this beam?</button>
+            <button class="starter-chip" type="button">What happens if I double the beam depth?</button>
+          </div>
+          <div class="tutor-messages" id="tutorMessages"></div>
+          <div class="tutor-input-row">
+            <input
+              class="input-3d"
+              id="tutorInput"
+              type="text"
+              placeholder="Ask any question about this beam, its diagrams, or a step in the solution..."
+            />
+            <button class="btn-3d btn-3d-primary btn-sm" id="tutorSendBtn" type="button" style="white-space:nowrap;">
+              Send
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- =========================================================
+       FIRST-TIME QUICK GUIDE MODAL (?)
+       ========================================================= -->
+  <div class="modal-backdrop" id="guideModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="guideModalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-title" id="guideModalTitle">Quick-Start Guide &amp; Sign Conventions</div>
+        <button class="icon-btn" id="closeGuideModalBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="guide-grid">
+        <div class="guide-item">
+          <strong>Units &amp; Sign Convention</strong>
+          Length in <b>m</b>, Forces in <b>kN</b> (positive = downward ↓), Applied Moments in <b>kN·m</b> (positive = counterclockwise ↺), Modulus <i>E</i> in <b>GPa</b>, Moment of Inertia <i>I</i> in <b>m⁴</b>. Deflection <i>y</i> is reported in <b>mm</b> (negative = downward sag, positive = upward lift).
+        </div>
+        <div class="guide-item">
+          <strong>1. Double Integration Method</strong>
+          Integrates the bending moment equation <i>EI·y″(x) = M(x)</i> twice and applies support boundary conditions to find closed-form slope and deflection equations.
+        </div>
+        <div class="guide-item">
+          <strong>2. Moment-Area Method</strong>
+          Partitions the <i>M(x)/EI</i> curvature diagram into geometric areas <i>Aᵢ</i> with centroids <i>x̄ᵢ</i>, then uses reference tangents and tangential deviations to compute slopes and deflections.
+        </div>
+        <div class="guide-item">
+          <strong>3. Conjugate Beam Method</strong>
+          Transforms real supports into conjugate supports (e.g., Fixed ↔ Free, Pin ↔ Pin), loads the beam with <i>w*(x) = M(x)/EI</i>, and reads real slope as conjugate shear <i>V*</i> and real deflection as conjugate moment <i>M*</i>.
+        </div>
+        <div class="guide-item">
+          <strong>Want visual explanations of every symbol &amp; diagram?</strong>
+          Browse the illustrated <a href="glossary.html" style="color:var(--wisteria); font-weight:800;">Terms &amp; Visual Guide page →</a> for plain-English definitions of supports, load arrows, charts, and all 3 methods.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       AI API KEY CONFIGURATION MODAL
+       ========================================================= -->
+  <div class="modal-backdrop" id="aiModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-title" id="aiModalTitle">AI Model API Configuration</div>
+        <button class="icon-btn" id="closeAiModalBtn" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <p class="hint-text" style="margin-top:0; margin-bottom:14px;">
+        Connect your own API key from Gemini, OpenAI, Anthropic Claude, OpenRouter, DeepSeek, Groq, or local Ollama. Your key stays strictly in your browser.
+      </p>
+
+      <div class="form-grid">
+        <div class="form-group span-2">
+          <label for="aiProviderSelect">AI Provider</label>
+          <select class="select-3d" id="aiProviderSelect">
+            <option value="gemini">Google Gemini (Fast &amp; generous free tier)</option>
+            <option value="openai">OpenAI (GPT-4o / GPT-4.1 / o3-mini)</option>
+            <option value="anthropic">Anthropic Claude (Sonnet / Haiku)</option>
+            <option value="openrouter">OpenRouter (100+ Models)</option>
+            <option value="deepseek">DeepSeek (deepseek-chat / reasoner)</option>
+            <option value="groq">Groq (Llama 3.3 / Qwen)</option>
+            <option value="custom">Custom / Local OpenAI-Compatible (Ollama)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="aiModelPreset">Recommended Model</label>
+          <select class="select-3d" id="aiModelPreset"></select>
+        </div>
+        <div class="form-group">
+          <label for="aiModelInput">Model ID</label>
+          <input class="input-3d" id="aiModelInput" type="text" />
+        </div>
+
+        <div class="form-group span-2 hidden" id="customBaseUrlGroup">
+          <label for="aiCustomBaseUrl">Custom Chat Completions Endpoint URL</label>
+          <input class="input-3d" id="aiCustomBaseUrl" type="text" placeholder="http://localhost:11434/v1/chat/completions" />
+        </div>
+
+        <div class="form-group span-2">
+          <label for="aiApiKeyInput">API Key</label>
+          <div class="key-input-wrap">
+            <input class="input-3d" id="aiApiKeyInput" type="password" placeholder="Enter your API key..." autocomplete="off" />
+            <button class="btn-3d btn-3d-ghost btn-sm" id="toggleKeyVisBtn" type="button">Show</button>
+          </div>
+          <div class="hint-text" id="aiKeyHint"></div>
+        </div>
+
+        <div class="form-group span-2">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input id="aiPersistKeyCheckbox" type="checkbox" checked style="accent-color:var(--wisteria);" />
+            <span>Remember API key in this browser (uncheck for session-only)</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="aiTestResult" class="hint-text" style="margin-top:10px; font-weight:700;"></div>
+
+      <div style="display:flex; justify-content:space-between; gap:10px; margin-top:18px; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px;">
+          <button class="btn-3d btn-3d-ghost btn-sm" id="testAiKeyBtn" type="button">Test Connection</button>
+          <button class="btn-3d btn-3d-ghost btn-sm" id="clearAiKeyBtn" type="button" style="color:var(--mauve-accent);">Clear Key</button>
+        </div>
+        <button class="btn-3d btn-3d-primary btn-sm" id="saveAiModalBtn" type="button">Save &amp; Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="js/beamEngine.js"></script>
+  <script src="js/solutionBuilder.js"></script>
+  <script src="js/aiService.js"></script>
+  <script src="js/viewer3d.js"></script>
+  <script src="js/diagrams.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
