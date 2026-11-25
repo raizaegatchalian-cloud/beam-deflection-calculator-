@@ -1,8 +1,8 @@
 /**
  * BeamStudio — Exact Piecewise-Polynomial Euler-Bernoulli Structural Mechanics Engine
- * Supports:
- *  - 6 Support Conditions: Simply Supported, Cantilever (Fixed Left / Fixed Right),
- *    Overhanging (custom pin & roller positions), Propped Cantilever, Fixed-Fixed.
+ * Scope: Statically Determinate Beams Only
+ *  - 4 Support Conditions: Simply Supported, Cantilever (Fixed Left / Fixed Right),
+ *    and Overhanging (custom pin & roller positions).
  *  - 4 Load Types: Point Load, UDL, UVL (Triangular/Trapezoidal), Applied Moment.
  *  - 3 Analysis Methods: Double Integration, Moment-Area, Conjugate Beam (independent formulations).
  *  - Cross-Section Properties: I-Beam (W-Section), Rectangular, Circular Tube, T-Beam, Custom I.
@@ -495,22 +495,8 @@
         { id: 'A', type: 'pin', x: xA },
         { id: 'B', type: 'roller', x: xB }
       ];
-    } else if (supportType === 'propped_cantilever') {
-      isIndeterminate = true;
-      indeterminacyDegree = 1;
-      supports = [
-        { id: 'A', type: 'fixed', x: 0 },
-        { id: 'B', type: 'roller', x: L }
-      ];
-    } else if (supportType === 'fixed_fixed') {
-      isIndeterminate = true;
-      indeterminacyDegree = 2;
-      supports = [
-        { id: 'A', type: 'fixed', x: 0 },
-        { id: 'B', type: 'fixed', x: L }
-      ];
     } else {
-      throw new Error(`Unsupported support type: ${supportType}`);
+      throw new Error(`Unsupported support type: ${supportType}. Only statically determinate beams are supported.`);
     }
 
     const breakpoints = getBreakpoints(L, supports, loads);
@@ -541,30 +527,6 @@
       const resB = appliedLoadResultants(loads, L);
       reactions.RB = resB.totalForce;
       reactions.MB = resB.totalMomentCW; // CCW reaction moment at x=L
-    } else if (supportType === 'propped_cantilever') {
-      // Primary structure: cantilever fixed at x=0
-      const pForces0 = [{ x: 0, F_up: totalForce }, ...appliedPointForces];
-      const pMoments0 = [{ x: 0, M_ccw: totalMomentCW }, ...appliedMomentsList];
-      const segs0 = buildExactInternalPolys(L, breakpoints, pForces0, pMoments0, distLoads);
-      const int0 = integrateCurvatureSegments(segs0, EI, 0, 0);
-      const deltaB0 = int0.endY;
-      const deltaB1 = Math.pow(L, 3) / (3 * EI);
-      reactions.RB = -deltaB0 / deltaB1;
-      reactions.RA = totalForce - reactions.RB;
-      reactions.MA = totalMomentCW - reactions.RB * L;
-    } else if (supportType === 'fixed_fixed') {
-      // Primary structure: cantilever fixed at x=0, release RB (upward) & MB (CCW) at x=L
-      const pForces0 = [{ x: 0, F_up: totalForce }, ...appliedPointForces];
-      const pMoments0 = [{ x: 0, M_ccw: totalMomentCW }, ...appliedMomentsList];
-      const segs0 = buildExactInternalPolys(L, breakpoints, pForces0, pMoments0, distLoads);
-      const int0 = integrateCurvatureSegments(segs0, EI, 0, 0);
-      const d0 = int0.endY;
-      const t0 = int0.endTheta;
-      reactions.RB = (EI / Math.pow(L, 3)) * (-12 * d0 + 6 * L * t0);
-      reactions.MB = (EI / Math.pow(L, 2)) * (6 * d0 - 4 * L * t0);
-      reactions.RA = totalForce - reactions.RB;
-      // Sum M_A (CCW+) = MA + MB + RB*L - totalMomentCW = 0 => MA = totalMomentCW - RB*L - MB
-      reactions.MA = totalMomentCW - reactions.RB * L - reactions.MB;
     }
 
     // Build complete point force and moment lists including reactions
@@ -580,12 +542,6 @@
     } else if (supportType === 'cantilever_right') {
       allPointForces.push({ x: L, F_up: reactions.RB });
       allMoments.push({ x: L, M_ccw: reactions.MB });
-    } else if (supportType === 'propped_cantilever') {
-      allPointForces.push({ x: 0, F_up: reactions.RA }, { x: L, F_up: reactions.RB });
-      allMoments.push({ x: 0, M_ccw: reactions.MA });
-    } else if (supportType === 'fixed_fixed') {
-      allPointForces.push({ x: 0, F_up: reactions.RA }, { x: L, F_up: reactions.RB });
-      allMoments.push({ x: 0, M_ccw: reactions.MA }, { x: L, M_ccw: reactions.MB });
     }
 
     // Step 2: Exact piecewise V(x) and M(x)
@@ -605,11 +561,7 @@
       const y0B = evalPiecewise(zeroInt.segments, xB, 'yPoly');
       C1 = -(y0B - y0A) / (xB - xA);
       C2 = -y0A - C1 * xA;
-    } else if (
-      supportType === 'cantilever_left' ||
-      supportType === 'propped_cantilever' ||
-      supportType === 'fixed_fixed'
-    ) {
+    } else if (supportType === 'cantilever_left') {
       // theta(0) = 0, y(0) = 0
       C1 = 0;
       C2 = 0;
@@ -831,18 +783,6 @@
       conjugateReactions.MA_star = -evalPiecewise(segments, 0, 'yPoly');
       conjugateReactions.RB_star = -evalPiecewise(segments, L, 'thetaPoly');
       conjugateReactions.MB_star = evalPiecewise(segments, L, 'yPoly');
-    } else if (supportType === 'propped_cantilever') {
-      conjugateSupports.push(
-        { id: 'A*', x: 0, realType: 'Fixed', conjType: 'Free', symbol: 'free' },
-        { id: 'B*', x: L, realType: 'Roller', conjType: 'Roller', symbol: 'roller' }
-      );
-      conjugateReactions.RB_star = -totalWStar; // equals -theta(L)
-    } else if (supportType === 'fixed_fixed') {
-      conjugateSupports.push(
-        { id: 'A*', x: 0, realType: 'Fixed', conjType: 'Free', symbol: 'free' },
-        { id: 'B*', x: L, realType: 'Fixed', conjType: 'Free', symbol: 'free' }
-      );
-      // Self-equilibrating elastic load! totalWStar == 0 and totalMStarAbout0 == 0!
     }
 
     function evalConjugateBeamAt(x) {

@@ -98,18 +98,6 @@
         { type: 'UDL', w: 14, a: 1.5, b: 6.5 },
         { type: 'Point', P: 22, a: 8 }
       ]
-    },
-    fixed_fixed: {
-      label: 'Fixed-Fixed Beam (Indeterminate)',
-      length: 6,
-      E: 28,
-      supportType: 'fixed_fixed',
-      queryX: 3,
-      section: { type: 'rect', b: 300, h: 450 },
-      loads: [
-        { type: 'UDL', w: 18, a: 0, b: 6 },
-        { type: 'Point', P: 40, a: 2 }
-      ]
     }
   };
 
@@ -688,9 +676,7 @@
     if (Math.abs(r.MA) > 1e-4) rList.push(`M<sub>A</sub> = ${r.MA.toFixed(1)} kN·m`);
     if (Math.abs(r.MB) > 1e-4) rList.push(`M<sub>B</sub> = ${r.MB.toFixed(1)} kN·m`);
     $('kpiReactions').innerHTML = rList.join(' &middot; ');
-    $('kpiReactionsSub').textContent = sol.isIndeterminate
-      ? `Indeterminate (deg ${sol.indeterminacyDegree})`
-      : 'Static equilibrium';
+    $('kpiReactionsSub').textContent = 'Static equilibrium (determinate)';
   }
 
   function setInspectPointX(newX, updateNumberInput = true) {

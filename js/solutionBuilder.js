@@ -149,9 +149,7 @@
       simply_supported: 'Simply Supported (Pin at A, Roller at B)',
       cantilever_left: 'Cantilever (Fixed at Left x = 0, Free at x = L)',
       cantilever_right: 'Cantilever (Free at x = 0, Fixed at Right x = L)',
-      overhanging: 'Overhanging Beam (Pin at x_A, Roller at x_B)',
-      propped_cantilever: 'Propped Cantilever (Fixed at x = 0, Roller at x = L — Statically Indeterminate)',
-      fixed_fixed: 'Fixed-Fixed Beam (Fixed at Both Ends — Statically Indeterminate)'
+      overhanging: 'Overhanging Beam (Pin at x_A, Roller at x_B)'
     };
     return map[type] || type;
   }
@@ -180,14 +178,11 @@
     if (Math.abs(reactions.MB) > 1e-9 || input.supports.some((s) => s.id === 'B' && s.type === 'fixed')) rParts.push(`M_B = ${fmt(reactions.MB, 4)}\\text{ kN}\\cdot\\text{m}`);
     eqs.push(rParts.join(', \\quad '));
 
-    let note = 'Support reactions are obtained from static equilibrium (∑F_y = 0, ∑M = 0).';
-    if (isIndeterminate) {
-      note = `This beam is statically indeterminate to degree ${indeterminacyDegree}. Redundant reactions were solved via exact elastic compatibility coupled with static equilibrium.`;
-    }
+    const note = 'Support reactions are obtained from static equilibrium (∑F_y = 0, ∑M = 0).';
 
     return {
       title: 'Step 1 — Beam Stiffness & Support Reactions',
-      badge: input.isConstantEI ? 'Constant EI' : isIndeterminate ? `Indeterminate (deg ${indeterminacyDegree})` : 'Balance',
+      badge: input.isConstantEI ? 'Constant EI' : 'Static Balance',
       description: note,
       equations: eqs
     };
@@ -217,8 +212,6 @@
     else if (input.supportType === 'overhanging') bcText = `Boundary conditions at supports A and B: y(${fmt(input.supports[0].x, 3)}) = 0 and y(${fmt(input.supports[1].x, 3)}) = 0.`;
     else if (input.supportType === 'cantilever_left') bcText = 'Fixed-end boundary conditions at x = 0: θ(0) = 0 and y(0) = 0.';
     else if (input.supportType === 'cantilever_right') bcText = `Fixed-end boundary conditions at x = L: θ(${fmt(input.L, 3)}) = 0 and y(${fmt(input.L, 3)}) = 0.`;
-    else if (input.supportType === 'propped_cantilever') bcText = `Fixed end at x = 0 gives θ(0) = 0, y(0) = 0; roller at x = L gives y(${fmt(input.L, 3)}) = 0.`;
-    else if (input.supportType === 'fixed_fixed') bcText = `Fixed ends at x = 0 and x = L enforce θ(0) = 0, y(0) = 0, θ(${fmt(input.L, 3)}) = 0, y(${fmt(input.L, 3)}) = 0.`;
 
     steps.push({
       title: 'Step 3 — Matching Support Conditions (C₁ & C₂)',
@@ -294,9 +287,7 @@
 
     const isFixedRef =
       input.supportType === 'cantilever_left' ||
-      input.supportType === 'cantilever_right' ||
-      input.supportType === 'propped_cantilever' ||
-      input.supportType === 'fixed_fixed';
+      input.supportType === 'cantilever_right';
 
     if (isFixedRef) {
       steps.push({
@@ -371,9 +362,6 @@
     }
     if (Math.abs(cr.MB_star) > 1e-12) {
       conjEqs.push(`M_B^* = ${fmtDeflTex(cr.MB_star, sol)} \\implies y(L) = ${fmtDeflTex(extrema.yEnd_mm / 1000, sol)}`);
-    }
-    if (input.supportType === 'fixed_fixed') {
-      conjEqs.push(`\\text{Fixed-Fixed } \\to \\text{ Free-Free mirror beam: } w^*(x) \\text{ is self-equilibrating } (\\sum F_y^* = 0, \\sum M^* = 0).`);
     }
 
     steps.push({
