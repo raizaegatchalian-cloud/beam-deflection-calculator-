@@ -203,6 +203,7 @@
     <div class="filter-bar">
       <div class="filter-pills" id="categoryPills">
         <button class="filter-pill active" data-cat="all" type="button">All Topics</button>
+        <button class="filter-pill" data-cat="howto" type="button">How to Use</button>
         <button class="filter-pill" data-cat="supports" type="button">Supports</button>
         <button class="filter-pill" data-cat="loads" type="button">Loads &amp; Arrows</button>
         <button class="filter-pill" data-cat="diagrams" type="button">Charts &amp; 3D Visuals</button>
@@ -211,6 +212,49 @@
       </div>
       <input class="input-3d search-box" id="termSearchInput" type="search" placeholder="Search a word, symbol, or chart..." />
     </div>
+
+    <!-- 0. HOW THE CALCULATOR WORKS (STEP-BY-STEP PROCESS) -->
+    <section class="section-group" data-group="howto">
+      <h2 class="group-heading">How to Use BeamStudio 3D (Step-by-Step Process)</h2>
+      <p class="group-desc">Follow these 4 simple steps to set up any beam, view it in 3D, and read its full step-by-step solutions.</p>
+      <div class="visual-grid">
+        <article class="term-card" data-cat="howto">
+          <div class="term-head">
+            <span class="term-name">Step 1 · Start Here &amp; Beam Setup</span>
+            <span class="term-symbol">Left Panel</span>
+          </div>
+          <p class="term-def">Either pick a <b>Ready-Made Example</b> at the top of the left panel to auto-fill everything, or type your own <b>Length (m)</b>, pick a <b>Material</b> (or check <b>Treat EI as Constant</b>), and select a <b>Support Condition</b>.</p>
+          <div class="term-tip"><strong>Optional:</strong> Open <b>Cross-Section &amp; Stiffness (E, I)</b> to pick a 3D beam shape (I-Beam, Rect, Tube, T-Beam) or enter a custom <i>I</i> in m⁴, cm⁴, mm⁴, or in⁴.</div>
+        </article>
+
+        <article class="term-card" data-cat="howto">
+          <div class="term-head">
+            <span class="term-name">Step 2 · Add Applied Loads</span>
+            <span class="term-symbol">Forces &amp; Moments</span>
+          </div>
+          <p class="term-def">Choose a load type (<b>Point</b>, <b>UDL</b>, <b>UVL</b>, or <b>Moment</b>), enter its magnitude and position(s) along the beam, and click <b>+ Add Load to Beam</b>. You can combine multiple loads on the same beam.</p>
+          <div class="term-tip"><strong>Sign rule:</strong> Positive vertical loads push downward (↓); positive moments twist counterclockwise (↺).</div>
+        </article>
+
+        <article class="term-card" data-cat="howto">
+          <div class="term-head">
+            <span class="term-name">Step 3 · Pick Method &amp; Calculate</span>
+            <span class="term-symbol">3 Methods</span>
+          </div>
+          <p class="term-def">Choose <b>Double Integration</b>, <b>Moment-Area</b>, <b>Conjugate Beam</b>, or <b>Compare All 3</b>, then click <b>Calculate Beam</b>. Your 3D beam, summary numbers, diagrams, and equations update instantly.</p>
+          <div class="term-tip"><strong>Unit switch:</strong> Use the <b>mm | cm | m</b> toggle on the Max Deflection card anytime to convert units in 1 click.</div>
+        </article>
+
+        <article class="term-card" data-cat="howto">
+          <div class="term-head">
+            <span class="term-name">Step 4 · Inspect Any Point &amp; Read Solutions</span>
+            <span class="term-symbol">Explore</span>
+          </div>
+          <p class="term-def">Drag the <b>3D beam</b> to rotate it, slide <b>Inspect Point x</b> (or hover any chart) to check any spot along the span, and switch tabs below between <b>Diagrams</b>, <b>Max Deflection Solution</b>, <b>Point x Solution</b>, and <b>AI Solver &amp; Tutor</b>.</p>
+          <div class="term-tip"><strong>Two solutions:</strong> Check <b>Max Deflection Solution</b> for peak sag, or <b>Point x Solution</b> for the exact step-by-step slope &amp; deflection at your chosen <i>x</i>!</div>
+        </article>
+      </div>
+    </section>
 
     <!-- 1. SUPPORT SYMBOLS -->
     <section class="section-group" data-group="supports">

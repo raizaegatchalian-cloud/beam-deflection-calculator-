@@ -30,7 +30,7 @@
     </div>
 
     <div class="topbar-actions">
-      <a class="ai-status-btn" href="glossary.html" style="text-decoration:none;" title="Plain-English definitions of terms, symbols &amp; diagrams">
+      <a class="ai-status-btn" href="glossary.html" style="text-decoration:none;" title="Open the Terms &amp; Visual Guide for processes, definitions, symbols, and diagrams">
         <span>📖 Terms &amp; Guide</span>
       </a>
 
@@ -39,7 +39,7 @@
         <span id="aiStatusText">Connect AI Key</span>
       </button>
 
-      <button class="icon-btn" id="openGuideBtn" type="button" title="Quick-Start Guide &amp; Sign Conventions">?</button>
+      <button class="icon-btn" id="openGuideBtn" type="button" title="Quick Summary &amp; Sign Conventions">?</button>
 
       <button class="icon-btn" id="printReportBtn" type="button" title="Print / Save as PDF">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -57,24 +57,18 @@
     </div>
   </header>
 
-  <!-- GENTLE FIRST-TIME WELCOME TIP -->
-  <div class="welcome-banner" id="welcomeBanner">
-    <div>
-      <strong>New here?</strong> Start on the left with <strong>Step 1 → Step 2 → Step 3</strong> (or pick a ready-made example). Unfamiliar with any symbol or chart? Open the <a href="glossary.html" style="color:var(--wisteria); font-weight:800;">Terms &amp; Visual Guide →</a>
-    </div>
-    <button class="banner-close" id="dismissBannerBtn" type="button" title="Dismiss tip">Got it ✕</button>
-  </div>
-
   <!-- =========================================================
        MAIN TWO-COLUMN WORKSPACE
        ========================================================= -->
   <main class="workspace">
     <!-- LEFT GUIDED SETUP SIDEBAR -->
     <aside class="sidebar">
-      <!-- Quick Example Loader -->
-      <div class="setup-step" style="padding:13px 16px;">
+      <!-- START HERE + READY-MADE EXAMPLE PICKER -->
+      <section class="start-here-card">
+        <span class="start-here-badge">★ Start Here</span>
+        <p class="start-here-lead">You can pick a ready-made example</p>
         <div class="form-group">
-          <label for="presetSelect">Load a Ready-Made Example</label>
+          <label for="presetSelect">Load a Ready-Made Example (auto-fills all inputs)</label>
           <select class="select-3d" id="presetSelect">
             <option value="">Choose an example beam...</option>
             <option value="ss_point">Simply Supported + Midspan Point Load</option>
@@ -84,7 +78,8 @@
             <option value="fixed_fixed">Fixed-Fixed Beam (Indeterminate)</option>
           </select>
         </div>
-      </div>
+        <div class="hint-text" style="margin-top:6px;">Or fill in your own beam details in Steps 1–3 below.</div>
+      </section>
 
       <!-- STEP 1: BEAM & SUPPORTS -->
       <section class="setup-step">
@@ -94,16 +89,17 @@
             <span class="step-heading-title">Beam &amp; Supports</span>
           </div>
         </div>
-        <div class="step-helper">Set your span length and how the beam is supported.</div>
+        <div class="step-helper">Enter your span length, stiffness, and support condition.</div>
 
         <div class="form-grid">
           <div class="form-group">
             <label for="beamLength">Length L (m)</label>
-            <input class="input-3d" id="beamLength" type="number" step="0.1" min="0.2" value="6" />
+            <input class="input-3d" id="beamLength" type="number" step="0.1" min="0.2" placeholder="e.g. 6" value="" />
           </div>
           <div class="form-group">
             <label for="materialPreset">Material / Stiffness</label>
             <select class="select-3d" id="materialPreset">
+              <option value="">Select material...</option>
               <option value="200">Steel (200 GPa)</option>
               <option value="69">Aluminum (69 GPa)</option>
               <option value="28">Concrete (28 GPa)</option>
@@ -123,6 +119,7 @@
           <div class="form-group span-2">
             <label for="supportType">Support Condition</label>
             <select class="select-3d" id="supportType">
+              <option value="">Select support condition...</option>
               <option value="simply_supported">Simply Supported (Pin &amp; Roller)</option>
               <option value="cantilever_left">Cantilever — Fixed at Left</option>
               <option value="cantilever_right">Cantilever — Fixed at Right</option>
@@ -134,29 +131,29 @@
 
           <div class="form-group hidden" id="overhangAGroup">
             <label for="supportAX">Pin Position x_A (m)</label>
-            <input class="input-3d" id="supportAX" type="number" step="0.1" min="0" value="0" />
+            <input class="input-3d" id="supportAX" type="number" step="0.1" min="0" placeholder="e.g. 0" value="" />
           </div>
           <div class="form-group hidden" id="overhangBGroup">
             <label for="supportBX">Roller Position x_B (m)</label>
-            <input class="input-3d" id="supportBX" type="number" step="0.1" min="0.1" value="4.5" />
+            <input class="input-3d" id="supportBX" type="number" step="0.1" min="0.1" placeholder="e.g. 4.5" value="" />
           </div>
         </div>
 
-        <!-- Collapsible Section & Stiffness (Progressive Disclosure) -->
+        <!-- Collapsible Section & Stiffness -->
         <details class="disclosure" id="sectionDisclosure">
           <summary>
             <span>Cross-Section &amp; Stiffness (E, I)</span>
-            <span class="summary-meta" id="sectionSummaryMeta">I-Beam ▾</span>
+            <span class="summary-meta" id="sectionSummaryMeta">Not set ▾</span>
           </summary>
           <div class="disclosure-body">
             <div class="form-grid">
               <div class="form-group">
                 <label for="youngsE">Modulus E (GPa)</label>
-                <input class="input-3d" id="youngsE" type="number" step="1" min="0.1" value="200" />
+                <input class="input-3d" id="youngsE" type="number" step="1" min="0.1" placeholder="e.g. 200" value="" />
               </div>
               <div class="form-group">
-                <label for="queryXInput">Check Point x_q (m)</label>
-                <input class="input-3d" id="queryXInput" type="number" step="0.1" min="0" value="3" />
+                <label for="queryXInput">Check Point x (m)</label>
+                <input class="input-3d" id="queryXInput" type="number" step="0.1" min="0" placeholder="e.g. 3" value="" />
               </div>
               <div class="form-group span-2">
                 <label for="sectionType">3D Cross-Section Shape</label>
@@ -173,8 +170,8 @@
             <div id="sectionDimsContainer" class="form-grid" style="margin-top:9px;"></div>
 
             <div class="section-mini-badge">
-              <span id="computedILabel">I = 8.87×10⁻⁵ m⁴</span>
-              <span id="computedEILabel">EI = 17,742 kN·m²</span>
+              <span id="computedILabel">I = —</span>
+              <span id="computedEILabel">EI = —</span>
             </div>
           </div>
         </details>
@@ -201,19 +198,19 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="loadMag" id="loadMagLabel">Force P (kN, ↓+)</label>
-            <input class="input-3d" id="loadMag" type="number" step="1" value="25" />
+            <input class="input-3d" id="loadMag" type="number" step="1" placeholder="e.g. 25" value="" />
           </div>
           <div class="form-group">
             <label for="loadA" id="loadALabel">Position a (m)</label>
-            <input class="input-3d" id="loadA" type="number" step="0.1" value="3" />
+            <input class="input-3d" id="loadA" type="number" step="0.1" placeholder="e.g. 3" value="" />
           </div>
           <div class="form-group hidden" id="loadBGroup">
             <label for="loadB">End Position b (m)</label>
-            <input class="input-3d" id="loadB" type="number" step="0.1" value="6" />
+            <input class="input-3d" id="loadB" type="number" step="0.1" placeholder="e.g. 6" value="" />
           </div>
           <div class="form-group hidden" id="loadW2Group">
             <label for="loadW2">End Intensity w₂ (kN/m)</label>
-            <input class="input-3d" id="loadW2" type="number" step="1" value="15" />
+            <input class="input-3d" id="loadW2" type="number" step="1" placeholder="e.g. 15" value="" />
           </div>
         </div>
 
@@ -250,7 +247,7 @@
           <button class="method-radio" data-method="conjugate_beam" type="button">
             <div>
               <div class="method-radio-title">Conjugate Beam Method</div>
-              <div class="method-radio-sub">Transformed supports, V* = θ &amp; M* = y</div>
+              <div class="method-radio-sub">Mirror supports, V* = θ &amp; M* = y</div>
             </div>
           </button>
           <button class="method-radio" data-method="compare" type="button">
@@ -269,6 +266,14 @@
 
     <!-- RIGHT MAIN STAGE -->
     <div class="main-stage">
+      <!-- RIGHT-SIDE TERMS & VISUAL GUIDE CALLOUT -->
+      <div class="right-guide-bar no-print">
+        <span>Need help reading any chart or symbol?</span>
+        <a class="right-guide-link" href="glossary.html">
+          📖 Open the Terms &amp; Visual Guide for processes, definitions &amp; symbols →
+        </a>
+      </div>
+
       <!-- HERO 3D VIEWPORT + UNIFIED RESULTS STRIP -->
       <section class="card-3d viewport-card">
         <div class="viewport-header">
@@ -299,6 +304,19 @@
           <div class="stage-3d-canvas" id="viewer3dContainer"></div>
           <div class="stage-hint">Drag to rotate · Right-drag to pan · Scroll to zoom</div>
 
+          <!-- Inviting Blank-State Overlay until user calculates or picks an example -->
+          <div class="stage-empty-overlay" id="stageEmptyOverlay">
+            <div class="stage-empty-card">
+              <h3>Ready to Analyze Your Beam</h3>
+              <p>
+                Fill in your beam details on the left under <strong>Start Here</strong> — or pick a ready-made example to auto-fill everything and see your live 3D beam, diagrams, and step-by-step solutions.
+              </p>
+              <button class="btn-3d btn-3d-primary btn-sm" id="quickStartExampleBtn" type="button">
+                Load Starter Example
+              </button>
+            </div>
+          </div>
+
           <div class="stage-hud-bottom">
             <div class="hud-pill">
               <span>Bend Scale</span>
@@ -313,7 +331,7 @@
           </div>
         </div>
 
-        <!-- Unified Key Results Strip (Directly Tied to the 3D Beam) -->
+        <!-- Unified Key Results Strip -->
         <div class="summary-strip">
           <div class="summary-cell">
             <div class="summary-label-row">
@@ -326,7 +344,7 @@
               <span class="unit-ei-tag hidden" id="deflEiTag">/ EI</span>
             </div>
             <div class="summary-value highlight" id="kpiDefl">—</div>
-            <div class="summary-sub" id="kpiDeflSub">Location &amp; span ratio</div>
+            <div class="summary-sub" id="kpiDeflSub">Enter inputs or choose an example</div>
           </div>
           <div class="summary-cell">
             <div class="summary-label">Max Bending Moment</div>
@@ -345,31 +363,35 @@
           </div>
         </div>
 
-        <!-- Synchronized Section-Cut Inspector -->
+        <!-- Synchronized Section-Cut Inspector (Also drives Point x Solution!) -->
         <div class="probe-banner">
           <div style="display:flex; align-items:center; gap:10px; flex:1 1 200px;">
             <span>Inspect Point x:</span>
-            <input id="sectionProbeSlider" type="range" min="0" max="6" step="0.02" value="3" style="flex:1; accent-color:var(--wisteria);" />
-            <span id="probeXVal" style="min-width:52px;">3.00 m</span>
+            <input id="sectionProbeSlider" type="range" min="0" max="6" step="0.02" value="0" style="flex:1; accent-color:var(--wisteria);" disabled />
+            <span id="probeXVal" style="min-width:54px;">—</span>
           </div>
           <div class="probe-metrics" id="probeMetrics">
-            <span>V: <b>0.00 kN</b></span>
-            <span>M: <b>0.00 kN·m</b></span>
-            <span>θ: <b>0.00 mrad</b></span>
-            <span>δ: <b>0.00 mm</b></span>
+            <span>V: <b>—</b></span>
+            <span>M: <b>—</b></span>
+            <span>θ: <b>—</b></span>
+            <span>δ: <b>—</b></span>
           </div>
         </div>
       </section>
 
-      <!-- CALM 3-TAB WORKSPACE SWITCHER (Show ONE Focused Area at a Time!) -->
+      <!-- 4-TAB WORKSPACE SWITCHER (Diagrams | Max Deflection Solution | Point x Solution | AI) -->
       <nav class="workspace-tabs no-print" id="workspaceTabs">
         <div class="workspace-tab-group">
           <button class="ws-tab active" data-ws-tab="diagrams" type="button">
             <span>Diagrams</span>
             <span class="diagram-tag" id="activeMethodPill" style="background:rgba(243,238,248,0.22); color:inherit;">Double Integration</span>
           </button>
-          <button class="ws-tab" data-ws-tab="solution" type="button">
-            <span>Step-by-Step Solution</span>
+          <button class="ws-tab" data-ws-tab="solution_max" type="button">
+            <span>Max Deflection Solution</span>
+          </button>
+          <button class="ws-tab" data-ws-tab="solution_point" type="button">
+            <span>Point x Solution</span>
+            <span class="diagram-tag" id="pointTabBadge" style="background:rgba(142,164,196,0.28); color:inherit;">x = —</span>
           </button>
           <button class="ws-tab" data-ws-tab="ai" type="button">
             <span>✦ AI Solver &amp; Tutor</span>
@@ -382,21 +404,37 @@
         <div class="diagrams-grid" id="diagramsGrid"></div>
       </section>
 
-      <!-- TAB PANEL 2: STEP-BY-STEP SOLUTION -->
-      <section class="card-3d hidden" id="panelSolution">
+      <!-- TAB PANEL 2: MAX DEFLECTION & LOCATION SOLUTION -->
+      <section class="card-3d hidden" id="panelSolutionMax">
         <div class="solution-top-bar">
           <div>
-            <div class="section-title" id="solutionCardTitle">Step-by-Step Solution — Double Integration Method</div>
-            <div class="section-sub">Exact analytical equations derived for your current beam configuration.</div>
+            <div class="section-title" id="solutionMaxTitle">Max Deflection Solution — Double Integration Method</div>
+            <div class="section-sub">Step-by-step computation for the position (x_max) and value of maximum deflection.</div>
           </div>
           <button class="btn-3d btn-3d-aurora btn-sm no-print" id="jumpToAiBtn" type="button">
             ✦ Explain or Verify with AI
           </button>
         </div>
-        <div id="builtInSolutionContainer"></div>
+        <div id="builtInSolutionMaxContainer"></div>
       </section>
 
-      <!-- TAB PANEL 3: AI SOLVER & TUTOR -->
+      <!-- TAB PANEL 3: SLOPE & DEFLECTION AT ANY INSPECTED POINT x -->
+      <section class="card-3d hidden" id="panelSolutionPoint">
+        <div class="solution-top-bar">
+          <div>
+            <div class="section-title" id="solutionPointTitle">Slope &amp; Deflection at Any Point x — Double Integration Method</div>
+            <div class="section-sub">Synced with the <strong>Inspect Point x</strong> slider above — or type any exact position along the beam below.</div>
+          </div>
+          <div class="point-x-inline no-print">
+            <label for="pointSolutionXInput">Point x =</label>
+            <input class="input-3d" id="pointSolutionXInput" type="number" step="0.05" min="0" placeholder="0.00" />
+            <span>m</span>
+          </div>
+        </div>
+        <div id="builtInSolutionPointContainer"></div>
+      </section>
+
+      <!-- TAB PANEL 4: AI SOLVER & TUTOR -->
       <section class="card-3d hidden" id="panelAi">
         <div class="ai-hero-bar">
           <div>
@@ -450,34 +488,26 @@
   </main>
 
   <!-- =========================================================
-       FIRST-TIME QUICK GUIDE MODAL (?)
+       QUICK SUMMARY MODAL (?)
        ========================================================= -->
   <div class="modal-backdrop" id="guideModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="guideModalTitle">
     <div class="modal-card">
       <div class="modal-head">
-        <div class="modal-title" id="guideModalTitle">Quick-Start Guide &amp; Sign Conventions</div>
+        <div class="modal-title" id="guideModalTitle">Quick Summary &amp; Sign Conventions</div>
         <button class="icon-btn" id="closeGuideModalBtn" type="button" aria-label="Close">✕</button>
       </div>
       <div class="guide-grid">
         <div class="guide-item">
           <strong>Units &amp; Sign Convention</strong>
-          Length in <b>m</b>, Forces in <b>kN</b> (positive = downward ↓), Applied Moments in <b>kN·m</b> (positive = counterclockwise ↺), Modulus <i>E</i> in <b>GPa</b>, Moment of Inertia <i>I</i> in <b>m⁴</b>. Deflection <i>y</i> is reported in <b>mm</b> (negative = downward sag, positive = upward lift).
+          Length in <b>m</b>, Forces in <b>kN</b> (positive = downward ↓), Applied Moments in <b>kN·m</b> (positive = counterclockwise ↺), Modulus <i>E</i> in <b>GPa</b>, Moment of Inertia <i>I</i> in <b>m⁴ / cm⁴ / mm⁴ / in⁴</b>. Deflection <i>y</i> is negative (−) when sagging downward and positive (+) when lifting upward.
         </div>
         <div class="guide-item">
-          <strong>1. Double Integration Method</strong>
-          Integrates the bending moment equation <i>EI·y″(x) = M(x)</i> twice and applies support boundary conditions to find closed-form slope and deflection equations.
+          <strong>Two Dedicated Step-by-Step Solutions</strong>
+          Use <b>Max Deflection Solution</b> for the full computation of <i>x_max</i> and peak sag, and <b>Point x Solution</b> for the exact slope and deflection at whichever position is selected in <b>Inspect Point x</b>!
         </div>
         <div class="guide-item">
-          <strong>2. Moment-Area Method</strong>
-          Partitions the <i>M(x)/EI</i> curvature diagram into geometric areas <i>Aᵢ</i> with centroids <i>x̄ᵢ</i>, then uses reference tangents and tangential deviations to compute slopes and deflections.
-        </div>
-        <div class="guide-item">
-          <strong>3. Conjugate Beam Method</strong>
-          Transforms real supports into conjugate supports (e.g., Fixed ↔ Free, Pin ↔ Pin), loads the beam with <i>w*(x) = M(x)/EI</i>, and reads real slope as conjugate shear <i>V*</i> and real deflection as conjugate moment <i>M*</i>.
-        </div>
-        <div class="guide-item">
-          <strong>Want visual explanations of every symbol &amp; diagram?</strong>
-          Browse the illustrated <a href="glossary.html" style="color:var(--wisteria); font-weight:800;">Terms &amp; Visual Guide page →</a> for plain-English definitions of supports, load arrows, charts, and all 3 methods.
+          <strong>Full Step-by-Step Guide, Definitions &amp; Visual Symbols</strong>
+          <a href="glossary.html" style="color:var(--wisteria); font-weight:800;">Open the Terms &amp; Visual Guide page →</a> for step-by-step usage instructions and illustrated explanations of every symbol and diagram.
         </div>
       </div>
     </div>

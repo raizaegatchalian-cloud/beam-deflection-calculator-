@@ -1,9 +1,9 @@
 /**
  * BeamStudio — Analytical Step-by-Step Solution Builder (LaTeX + Structured Steps)
- * Supports:
- *  - Deflection output units: mm, cm, m
- *  - Constant EI symbolic mode (slopes in kN·m²/EI, deflections in kN·m³/EI)
- *  - Double Integration, Moment-Area, and Conjugate Beam methods
+ * Produces TWO dedicated solution views for all 3 methods:
+ *  1. Max Deflection Solution (finding x_max & peak deflection δ_max)
+ *  2. Point x Solution (finding exact Slope θ(x_p) & Deflection y(x_p) at ANY chosen point x_p)
+ * Supports mm, cm, m units AND Constant EI symbolic mode (/EI).
  */
 (function (global) {
   'use strict';
@@ -49,6 +49,63 @@
     return `${fmt(valMeters * scale, 4)} ${unit}`;
   }
 
+  function evalPoly(c, u) {
+    let val = 0;
+    let p = 1;
+    for (let i = 0; i < c.length; i++) {
+      val += c[i] * p;
+      p *= u;
+    }
+    return val;
+  }
+
+  function integratePoly(c) {
+    const out = [0];
+    for (let i = 0; i < c.length; i++) out.push(c[i] / (i + 1));
+    return out;
+  }
+
+  /**
+   * Compute exact clipped M/EI sub-areas between xFrom and xTo (for Moment-Area & Conjugate Beam at any point x_p)
+   */
+  function getSubRegionsBetween(sol, xFrom, xTo) {
+    const lo = Math.min(xFrom, xTo);
+    const hi = Math.max(xFrom, xTo);
+    const rows = [];
+    let totalArea = 0;
+    let totalMomAboutTarget = 0;
+    const dir = xTo >= xFrom ? 1 : -1;
+
+    for (const seg of sol.segments) {
+      const a = Math.max(lo, seg.x1);
+      const b = Math.min(hi, seg.x2);
+      if (b - a <= 1e-8) continue;
+      const u1 = a - seg.x1;
+      const u2 = b - seg.x1;
+      const K = integratePoly(seg.kPoly);
+      const area = evalPoly(K, u2) - evalPoly(K, u1);
+      const UK = integratePoly([0, ...seg.kPoly]);
+      const uArea = evalPoly(UK, u2) - evalPoly(UK, u1);
+      const xArea = seg.x1 * area + uArea;
+      const xBar = Math.abs(area) > 1e-13 ? xArea / area : 0.5 * (a + b);
+      const arm = xTo - xBar;
+      const mom = xTo * area - xArea;
+
+      totalArea += dir * area;
+      totalMomAboutTarget += dir * mom;
+
+      rows.push({
+        interval: `[${fmt(a, 3)}, ${fmt(b, 3)}]`,
+        area: dir * area,
+        xBar,
+        arm,
+        contribution: dir * mom
+      });
+    }
+
+    return { rows, totalArea, totalMomAboutTarget, lo, hi, dir };
+  }
+
   function polyToLatex(coeffs, x1) {
     const varStr = Math.abs(x1) < 1e-7 ? 'x' : `(x - ${fmt(x1, 3)})`;
     const terms = [];
@@ -62,6 +119,29 @@
       else terms.push(`${sign}${absC}\\,${varStr}^{${i}}`);
     }
     return terms.length ? terms.join('') : '0';
+  }
+
+  function polySubLatex(coeffs, x1, xVal) {
+    const uVal = xVal - x1;
+    const uStr = Math.abs(x1) < 1e-7 ? `(${fmt(xVal, 3)})` : `(${fmt(xVal, 3)} - ${fmt(x1, 3)})`;
+    const terms = [];
+    for (let i = 0; i < coeffs.length; i++) {
+      const c = coeffs[i];
+      if (Math.abs(c) < 1e-8) continue;
+      const sign = c >= 0 ? (terms.length === 0 ? '' : ' + ') : (terms.length === 0 ? '-' : ' - ');
+      const absC = fmt(Math.abs(c), 4);
+      if (i === 0) terms.push(`${sign}${absC}`);
+      else if (i === 1) terms.push(`${sign}${absC}${uStr}`);
+      else terms.push(`${sign}${absC}${uStr}^{${i}}`);
+    }
+    return terms.length ? terms.join('') : '0';
+  }
+
+  function findActiveSegment(segments, xVal) {
+    for (const seg of segments) {
+      if (xVal >= seg.x1 - 1e-7 && xVal <= seg.x2 + 1e-7) return seg;
+    }
+    return segments[segments.length - 1];
   }
 
   function supportLabel(type) {
@@ -113,11 +193,12 @@
     };
   }
 
-  /**
-   * 1. Double Integration Method Step-by-Step Derivation
-   */
+  // =========================================================================
+  // PART A: MAXIMUM DEFLECTION & LOCATION SOLUTIONS (ALL 3 METHODS)
+  // =========================================================================
+
   function buildDoubleIntegrationSteps(sol) {
-    const { input, segments, constants, extrema, query } = sol;
+    const { input, segments, constants, extrema } = sol;
     const steps = [buildReactionsStep(sol)];
 
     const momentEqs = segments.map((seg) => {
@@ -126,19 +207,10 @@
     });
     steps.push({
       title: 'Step 2 — Bending Moment Equations EI·y′′(x) = M(x)',
-      badge: 'Governing ODE',
-      description:
-        'Using the Euler-Bernoulli differential equation EI·d²y/dx² = M(x) (sagging positive, y upward positive), express M(x) on each continuous segment:',
+      badge: 'Moment Formula',
+      description: 'Write the bending moment equation M(x) on each continuous segment along the beam:',
       equations: [`EI \\frac{d^2 y}{dx^2} = M(x)`, ...momentEqs]
     });
-
-    const intEqs = [];
-    for (const seg of segments) {
-      const eiTheta = seg.thetaPoly.map((c) => c * input.EI);
-      const eiY = seg.yPoly.map((c) => c * input.EI);
-      intEqs.push(`\\text{Interval } [${fmt(seg.x1, 2)}, ${fmt(seg.x2, 2)}]\\text{ m:}\\quad EI\\,\\theta(x) = ${polyToLatex(eiTheta, seg.x1)}`);
-      intEqs.push(`EI\\,y(x) = ${polyToLatex(eiY, seg.x1)}`);
-    }
 
     let bcText = '';
     if (input.supportType === 'simply_supported') bcText = `Boundary conditions at pin A and roller B: y(0) = 0 and y(${fmt(input.L, 3)}) = 0.`;
@@ -149,55 +221,66 @@
     else if (input.supportType === 'fixed_fixed') bcText = `Fixed ends at x = 0 and x = L enforce θ(0) = 0, y(0) = 0, θ(${fmt(input.L, 3)}) = 0, y(${fmt(input.L, 3)}) = 0.`;
 
     steps.push({
-      title: 'Step 3 — Boundary Conditions & Integration Constants',
+      title: 'Step 3 — Matching Support Conditions (C₁ & C₂)',
       badge: 'Integration Constants',
-      description: `${bcText} Enforcing continuity across segment boundaries yields:`,
+      description: `${bcText} Integrating twice and enforcing continuity gives:`,
       equations: [
         `EI\\,C_1 = EI\\,\\theta(0) = ${fmt(constants.EI_C1, 4)}\\text{ kN}\\cdot\\text{m}^2 \\implies \\theta(0) = ${fmtSlopeTex(constants.C1, sol)}`,
         `EI\\,C_2 = EI\\,y(0) = ${fmt(constants.EI_C2, 4)}\\text{ kN}\\cdot\\text{m}^3 \\implies y(0) = ${fmtDeflTex(constants.C2, sol)}`
       ]
     });
 
+    const intEqs = [];
+    for (const seg of segments) {
+      const eiTheta = seg.thetaPoly.map((c) => c * input.EI);
+      const eiY = seg.yPoly.map((c) => c * input.EI);
+      intEqs.push(`\\text{Interval } [${fmt(seg.x1, 2)}, ${fmt(seg.x2, 2)}]\\text{ m:}\\quad EI\\,\\theta(x) = ${polyToLatex(eiTheta, seg.x1)}`);
+      intEqs.push(`EI\\,y(x) = ${polyToLatex(eiY, seg.x1)}`);
+    }
     steps.push({
-      title: 'Step 4 — Closed-Form Slope & Elastic Curve Equations',
+      title: 'Step 4 — Complete Slope & Deflection Equations',
       badge: 'Solved Functions',
-      description: 'Substituting C₁ and C₂ back into each piecewise integral yields the exact slope θ(x) and deflection y(x):',
+      description: 'Substituting C₁ and C₂ yields the exact slope θ(x) and deflection y(x) equations:',
       equations: intEqs
     });
 
+    const maxSeg = findActiveSegment(segments, extrema.deflection.maxX);
+    const maxEiY = maxSeg.yPoly.map((c) => c * input.EI);
+    const zeroSlopeTxt =
+      extrema.zeroSlopePoints.length > 0
+        ? `\\text{Zero-slope location(s) } (\\theta(x)=0):\\quad x = ${extrema.zeroSlopePoints.map((p) => `${fmt(p, 4)}\\text{ m}`).join(',\\; ')}`
+        : `\\text{Maximum bend occurs at the free end: } x_{\\max} = ${fmt(extrema.deflection.maxX, 4)}\\text{ m}`;
+
     steps.push({
-      title: 'Step 5 — Maximum Deflection & Check Point Evaluation',
-      badge: 'Final Results',
-      description: 'Setting θ(x) = 0 (and checking free ends) locates the peak elastic deflection:',
+      title: 'Step 5 — Location & Value of Maximum Deflection',
+      badge: 'Peak Deflection',
+      description: 'Maximum deflection occurs where beam tilt is zero (θ(x) = 0) or at a free end. Evaluating y(x) at x_max:',
       equations: [
+        zeroSlopeTxt,
+        `EI\\,y(${fmt(extrema.deflection.maxX, 4)}) = ${polySubLatex(maxEiY, maxSeg.x1, extrema.deflection.maxX)} = ${fmt(extrema.deflection.maxSigned * input.EI, 4)}\\text{ kN}\\cdot\\text{m}^3`,
         `\\delta_{\\max} = y(${fmt(extrema.deflection.maxX, 4)}\\text{ m}) = ${fmtDeflTex(extrema.deflection.maxSigned, sol)}`,
-        `\\theta(0) = ${fmtSlopeTex(extrema.thetaStart, sol)}, \\qquad \\theta(L) = ${fmtSlopeTex(extrema.thetaEnd, sol)}`,
-        `\\text{At check point } x_q = ${fmt(query.x, 3)}\\text{ m:}\\quad \\theta(x_q) = ${fmtSlopeTex(query.theta, sol)}, \\quad y(x_q) = ${fmtDeflTex(query.y, sol)}`
+        `\\text{End Slopes:}\\quad \\theta(0) = ${fmtSlopeTex(extrema.thetaStart, sol)}, \\qquad \\theta(L) = ${fmtSlopeTex(extrema.thetaEnd, sol)}`
       ]
     });
 
     return steps;
   }
 
-  /**
-   * 2. Moment-Area Method Step-by-Step Derivation
-   */
   function buildMomentAreaSteps(sol) {
-    const { input, momentArea, extrema, query } = sol;
+    const { input, momentArea, extrema } = sol;
     const steps = [buildReactionsStep(sol)];
     const areaUnit = input.isConstantEI ? 'kN·m²/EI' : 'rad';
 
     steps.push({
       title: 'Step 2 — Bending Areas & Balance Points (M/EI)',
       badge: 'Moment-Area Rules',
-      description:
-        'Divide the bending moment curve by stiffness EI and split it into clean shaded areas Aᵢ with balance points (centroids) x̄ᵢ:',
+      description: 'Divide the bending moment curve by stiffness EI and split it into clean shaded areas Aᵢ with balance points (centroids) x̄ᵢ:',
       equations: [
-        `\\textbf{Theorem 1:}\\quad \\theta_{B/A} = \\theta_B - \\theta_A = \\int_{x_A}^{x_B} \\frac{M(x)}{EI}\\,dx = \\sum A_i`,
-        `\\textbf{Theorem 2:}\\quad t_{B/A} = \\int_{x_A}^{x_B} \\frac{M(x)}{EI}(x_B - x)\\,dx = \\sum A_i\\,(x_B - \\bar{x}_i)`
+        `\\textbf{Rule 1 (Change in Tilt):}\\quad \\theta_{B/A} = \\int_{x_A}^{x_B} \\frac{M(x)}{EI}\\,dx = \\sum A_i`,
+        `\\textbf{Rule 2 (Tangent Gap):}\\quad t_{B/A} = \\int_{x_A}^{x_B} \\frac{M(x)}{EI}(x_B - x)\\,dx = \\sum A_i\\,(x_B - \\bar{x}_i)`
       ],
       table: {
-        headers: ['Region', 'Interval (m)', 'Geometry', `Area Aᵢ (${areaUnit})`, 'Centroid x̄ᵢ (m)', 'Arm |x_B - x̄ᵢ| (m)'],
+        headers: ['Area', 'Interval (m)', 'Shape', `Area Aᵢ (${areaUnit})`, 'Balance Point x̄ᵢ (m)', 'Distance |x_B - x̄ᵢ| (m)'],
         rows: momentArea.regions.map((r) => [
           r.id,
           `[${fmt(r.x1, 3)}, ${fmt(r.x2, 3)}]`,
@@ -218,8 +301,8 @@
     if (isFixedRef) {
       steps.push({
         title: 'Step 3 — Reference Tangent at Fixed Support',
-        badge: 'Horizontal Tangent',
-        description: `Because the beam is fixed at x_ref = ${fmt(momentArea.refX, 3)} m, the reference tangent is strictly horizontal (θ_ref = 0, y_ref = 0). The deflection at any point x equals the tangential deviation t_{x/ref} directly:`,
+        badge: 'Horizontal Line',
+        description: `Because the beam is fixed at x_ref = ${fmt(momentArea.refX, 3)} m, the straight reference tangent is perfectly horizontal (θ_ref = 0, y_ref = 0):`,
         equations: [
           `\\theta(${fmt(momentArea.refX, 2)}) = 0, \\qquad y(${fmt(momentArea.refX, 2)}) = 0`,
           `t_{${fmt(momentArea.targetX, 2)}/${fmt(momentArea.refX, 2)}} = ${fmtDeflTex(momentArea.t_target_ref, sol)}`
@@ -228,38 +311,32 @@
     } else {
       const spanAB = momentArea.targetX - momentArea.refX;
       steps.push({
-        title: 'Step 3 — Tangential Deviation t_{B/A} & Reference Support Slope θ_A',
+        title: 'Step 3 — Reference Tangent Gap t_{B/A} & Support Tilt θ_A',
         badge: 'Tangent Geometry',
-        description: `Draw a reference tangent at support A (x = ${fmt(momentArea.refX, 3)} m). Because both supports have zero deflection, the vertical deviation t_{B/A} at support B directly gives θ_A:`,
+        description: `Draw a straight tangent touching the bent beam at support A (x = ${fmt(momentArea.refX, 3)} m). Measuring the vertical gap t_{B/A} at support B gives θ_A:`,
         equations: [
           `t_{B/A} = \\sum_{x_A}^{x_B} A_i (x_B - \\bar{x}_i) = ${fmtDeflTex(momentArea.t_target_ref, sol)}`,
-          `y_B = y_A + \\theta_A (x_B - x_A) + t_{B/A} = 0 \\implies \\theta_A = -\\frac{t_{B/A}}{${fmt(spanAB, 3)}} = ${fmtSlopeTex(momentArea.thetaRef, sol)}`
+          `\\theta_A = -\\frac{t_{B/A}}{${fmt(spanAB, 3)}} = ${fmtSlopeTex(momentArea.thetaRef, sol)}`
         ]
       });
     }
 
     const maAtMax = momentArea.evalAt(extrema.deflection.maxX);
-    const maAtQuery = query.momentArea;
-
     steps.push({
-      title: 'Step 4 — Peak Deflection & Check Point via Moment-Area',
-      badge: 'Deflection Extraction',
-      description: 'Locate maximum deflection where the tangent becomes horizontal (θ(x) = 0) or at a free end, then combine tangent offset and tangential deviation:',
+      title: 'Step 4 — Location & Value of Maximum Deflection',
+      badge: 'Peak Deflection',
+      description: 'Find x_max where cumulative bending area cancels θ_ref (making the beam horizontal, θ = 0), or check the free tip, then extract δ_max:',
       equations: [
-        `t_{\\max/\\text{ref}} = ${fmtDeflTex(maAtMax.t_x_ref, sol)} \\quad \\text{at } x_{\\max} = ${fmt(extrema.deflection.maxX, 4)}\\text{ m}`,
-        `\\delta_{\\max} = y_{\\text{ref}} + \\theta_{\\text{ref}}(x_{\\max} - x_{\\text{ref}}) + t_{\\max/\\text{ref}} = ${fmtDeflTex(maAtMax.y, sol)}`,
-        `\\text{At check point } x_q = ${fmt(query.x, 3)}\\text{ m:}\\quad t_{q/\\text{ref}} = ${fmtDeflTex(maAtQuery.t_x_ref, sol)},\\quad y(x_q) = ${fmtDeflTex(maAtQuery.y, sol)}`
+        `x_{\\max} = ${fmt(extrema.deflection.maxX, 4)}\\text{ m} \\implies t_{\\max/\\text{ref}} = ${fmtDeflTex(maAtMax.t_x_ref, sol)}`,
+        `\\delta_{\\max} = y_{\\text{ref}} + \\theta_{\\text{ref}}(x_{\\max} - x_{\\text{ref}}) + t_{\\max/\\text{ref}} = ${fmtDeflTex(maAtMax.y, sol)}`
       ]
     });
 
     return steps;
   }
 
-  /**
-   * 3. Conjugate Beam Method Step-by-Step Derivation
-   */
   function buildConjugateBeamSteps(sol) {
-    const { input, conjugateBeam, extrema, query } = sol;
+    const { input, conjugateBeam, extrema } = sol;
     const steps = [buildReactionsStep(sol)];
 
     steps.push({
@@ -267,10 +344,10 @@
       badge: 'Support Swap',
       description: 'Swap real supports into mirror supports so that shear on this mirror beam gives real beam tilt (V* = θ) and bending moment gives real deflection (M* = y):',
       equations: [
-        `w^*(x) = \\frac{M(x)}{EI} \\quad (\\text{positive } M/EI \\text{ acts upward}), \\qquad V^*(x) \\equiv \\theta(x), \\qquad M^*(x) \\equiv y(x)`
+        `w^*(x) = \\frac{M(x)}{EI} \\quad (\\uparrow \\text{ sagging},\\; \\downarrow \\text{ hogging}), \\qquad V^*(x) \\equiv \\theta(x), \\qquad M^*(x) \\equiv y(x)`
       ],
       table: {
-        headers: ['Location', 'Position x (m)', 'Real Support', 'Conjugate Support', 'Physical Equivalence'],
+        headers: ['Location', 'Position x (m)', 'Real Support', 'Mirror Support', 'What It Means'],
         rows: conjugateBeam.supports.map((s) => {
           let equiv = 'V* = θ ≠ 0, M* = y = 0';
           if (s.symbol === 'free') equiv = 'V* = θ = 0, M* = y = 0';
@@ -296,31 +373,176 @@
       conjEqs.push(`M_B^* = ${fmtDeflTex(cr.MB_star, sol)} \\implies y(L) = ${fmtDeflTex(extrema.yEnd_mm / 1000, sol)}`);
     }
     if (input.supportType === 'fixed_fixed') {
-      conjEqs.push(`\\text{Fixed-Fixed } \\to \\text{ Free-Free conjugate beam: elastic load } w^*(x) \\text{ is self-equilibrating } (\\sum F_y^* = 0, \\sum M^* = 0).`);
+      conjEqs.push(`\\text{Fixed-Fixed } \\to \\text{ Free-Free mirror beam: } w^*(x) \\text{ is self-equilibrating } (\\sum F_y^* = 0, \\sum M^* = 0).`);
     }
 
     steps.push({
-      title: 'Step 3 — Conjugate Beam Equilibrium & Elastic Reactions',
-      badge: 'Conjugate Statics',
-      description: 'Load the conjugate beam with w*(x) = M(x)/EI and solve ∑F_y* = 0, ∑M* = 0 for conjugate reactions:',
+      title: 'Step 3 — Mirror Beam Reactions (Support Slopes)',
+      badge: 'Mirror Balance',
+      description: 'Load the mirror beam with w*(x) = M(x)/EI and solve ∑F_y* = 0, ∑M* = 0 for mirror reactions:',
       equations: conjEqs
     });
 
     const cjMax = conjugateBeam.evalAt(extrema.deflection.maxX);
-    const cjQ = query.conjugate;
-
     steps.push({
-      title: 'Step 4 — Conjugate Shear V*(x) & Conjugate Moment M*(x)',
-      badge: 'Slope & Deflection',
-      description: 'Maximum deflection occurs where conjugate shear V*(x) = 0 (or at a conjugate fixed end). Evaluating conjugate bending moment M*(x) yields the real deflection:',
+      title: 'Step 4 — Peak Deflection from Mirror Moment M*',
+      badge: 'Peak Deflection',
+      description: 'Maximum deflection occurs where mirror shear V*(x) = 0 (or at a fixed mirror end). Evaluating M*(x_max) gives exact δ_max:',
       equations: [
         `V^*(x_{\\max}) = \\theta(${fmt(extrema.deflection.maxX, 4)}) = ${fmtSlopeTex(cjMax.V_star, sol)}`,
-        `M^*(x_{\\max}) = \\delta_{\\max} = ${fmtDeflTex(cjMax.M_star, sol)} \\quad \\text{at } x = ${fmt(extrema.deflection.maxX, 4)}\\text{ m}`,
-        `\\text{At check point } x_q = ${fmt(query.x, 3)}\\text{ m:}\\quad V^*(x_q) = ${fmtSlopeTex(cjQ.V_star, sol)},\\quad M^*(x_q) = ${fmtDeflTex(cjQ.M_star, sol)}`
+        `M^*(x_{\\max}) = \\delta_{\\max} = ${fmtDeflTex(cjMax.M_star, sol)} \\quad \\text{at } x_{\\max} = ${fmt(extrema.deflection.maxX, 4)}\\text{ m}`
       ]
     });
 
     return steps;
+  }
+
+  // =========================================================================
+  // PART B: SLOPE & DEFLECTION AT ANY SELECTED POINT x_p (ALL 3 METHODS)
+  // =========================================================================
+
+  function buildPointSolutionSteps(sol, method, rawX) {
+    const xP = Math.max(0, Math.min(sol.input.L, Number(rawX) || 0));
+    const st = sol.evalAt(xP);
+    const { input, segments, momentArea, conjugateBeam } = sol;
+
+    // 1. Double Integration at x = xP
+    if (method === 'double_integration') {
+      const seg = findActiveSegment(segments, xP);
+      const eiTheta = seg.thetaPoly.map((c) => c * input.EI);
+      const eiY = seg.yPoly.map((c) => c * input.EI);
+
+      return [
+        {
+          title: `Step 1 — Locate Segment Containing x = ${fmt(xP, 3)} m`,
+          badge: `Interval [${fmt(seg.x1, 2)}, ${fmt(seg.x2, 2)}] m`,
+          description: `Point x = ${fmt(xP, 3)} m lies inside segment ${seg.index + 1} ([${fmt(seg.x1, 3)} m, ${fmt(seg.x2, 3)} m]). Using the solved Double Integration equations for this segment:`,
+          equations: [
+            `V(${fmt(xP, 3)}) = ${fmt(st.V, 4)}\\text{ kN}, \\qquad M(${fmt(xP, 3)}) = ${fmt(st.M, 4)}\\text{ kN}\\cdot\\text{m}`,
+            `EI\\,\\theta(x) = ${polyToLatex(eiTheta, seg.x1)}`,
+            `EI\\,y(x) = ${polyToLatex(eiY, seg.x1)}`
+          ]
+        },
+        {
+          title: `Step 2 — Substitute x = ${fmt(xP, 3)} m for Slope θ(x)`,
+          badge: 'Beam Tilt (Slope)',
+          description: `Plug x = ${fmt(xP, 3)} m into the slope equation EI·θ(x) and divide by flexural rigidity EI:`,
+          equations: [
+            `EI\\,\\theta(${fmt(xP, 3)}) = ${polySubLatex(eiTheta, seg.x1, xP)} = ${fmt(st.theta * input.EI, 4)}\\text{ kN}\\cdot\\text{m}^2`,
+            `\\theta(${fmt(xP, 3)}\\text{ m}) = ${fmtSlopeTex(st.theta, sol)}`
+          ]
+        },
+        {
+          title: `Step 3 — Substitute x = ${fmt(xP, 3)} m for Deflection y(x)`,
+          badge: 'Beam Bend (Deflection)',
+          description: `Plug x = ${fmt(xP, 3)} m into the deflection equation EI·y(x) and divide by EI:`,
+          equations: [
+            `EI\\,y(${fmt(xP, 3)}) = ${polySubLatex(eiY, seg.x1, xP)} = ${fmt(st.y * input.EI, 4)}\\text{ kN}\\cdot\\text{m}^3`,
+            `y(${fmt(xP, 3)}\\text{ m}) = ${fmtDeflTex(st.y, sol)}`
+          ]
+        }
+      ];
+    }
+
+    // 2. Moment-Area at x = xP
+    if (method === 'moment_area') {
+      const sub = getSubRegionsBetween(sol, momentArea.refX, xP);
+      const maP = momentArea.evalAt(xP);
+      const areaUnit = input.isConstantEI ? 'kN·m²/EI' : 'rad';
+      const deflUnit = input.isConstantEI ? 'kN·m³/EI' : sol.display.deflShortUnit;
+
+      return [
+        {
+          title: `Step 1 — Reference Tangent & Bending Areas up to x = ${fmt(xP, 3)} m`,
+          badge: `From x_ref = ${fmt(momentArea.refX, 2)} m`,
+          description: `Using the reference tangent at x_ref = ${fmt(momentArea.refX, 3)} m (θ_ref = ${input.isConstantEI ? `${fmt(momentArea.thetaRef, 4)}/EI` : `${fmtSci(momentArea.thetaRef)} rad`}), compute the M/EI area(s) strictly between x_ref and x = ${fmt(xP, 3)} m:`,
+          equations: [
+            `\\theta_{\\text{ref}} = ${fmtSlopeTex(momentArea.thetaRef, sol)}, \\qquad y_{\\text{ref}} = ${fmtDeflTex(momentArea.yRef, sol)}`
+          ],
+          table:
+            sub.rows.length > 0
+              ? {
+                  headers: ['Sub-Interval (m)', `Signed Area (${areaUnit})`, 'Balance Point x̄ (m)', 'Arm (x - x̄) (m)', `Contribution to t (${deflUnit})`],
+                  rows: sub.rows.map((r) => [
+                    r.interval,
+                    input.isConstantEI ? `${fmt(r.area, 4)} / EI` : fmtSci(r.area),
+                    fmt(r.xBar, 4),
+                    fmt(r.arm, 4),
+                    input.isConstantEI ? `${fmt(r.contribution, 4)} / EI` : fmt(r.contribution * sol.display.deflScale, 4)
+                  ])
+                }
+              : null
+        },
+        {
+          title: `Step 2 — Slope at x = ${fmt(xP, 3)} m (Moment-Area Rule 1)`,
+          badge: 'Beam Tilt (Slope)',
+          description: `Add the M/EI area between x_ref and x = ${fmt(xP, 3)} m to the reference tangent slope:`,
+          equations: [
+            `\\Delta\\theta_{${fmt(xP, 2)}/${fmt(momentArea.refX, 2)}} = \\int_{${fmt(momentArea.refX, 2)}}^{${fmt(xP, 2)}} \\frac{M(x)}{EI}\\,dx = ${fmtSlopeTex(maP.dTheta_x_ref, sol)}`,
+            `\\theta(${fmt(xP, 3)}\\text{ m}) = \\theta_{\\text{ref}} + \\Delta\\theta = ${fmtSlopeTex(maP.theta, sol)}`
+          ]
+        },
+        {
+          title: `Step 3 — Deflection at x = ${fmt(xP, 3)} m (Moment-Area Rule 2)`,
+          badge: 'Beam Bend (Deflection)',
+          description: `Sum (Area × moment arm to x = ${fmt(xP, 3)} m) for the tangential deviation t, then add the straight reference tangent height:`,
+          equations: [
+            `t_{${fmt(xP, 2)}/${fmt(momentArea.refX, 2)}} = \\int_{${fmt(momentArea.refX, 2)}}^{${fmt(xP, 2)}} \\frac{M(x)}{EI}(${fmt(xP, 2)} - x)\\,dx = ${fmtDeflTex(maP.t_x_ref, sol)}`,
+            `y(${fmt(xP, 3)}\\text{ m}) = y_{\\text{ref}} + \\theta_{\\text{ref}}(${fmt(xP, 2)} - ${fmt(momentArea.refX, 2)}) + t = ${fmtDeflTex(maP.y, sol)}`
+          ]
+        }
+      ];
+    }
+
+    // 3. Conjugate Beam at x = xP
+    const subLeft = getSubRegionsBetween(sol, 0, xP);
+    const cjP = conjugateBeam.evalAt(xP);
+    const V0_star = sol.extrema.thetaStart;
+    const M0_star = sol.extrema.yStart_mm / 1000;
+    const areaUnit = input.isConstantEI ? 'kN·m²/EI' : 'rad';
+    const deflUnit = input.isConstantEI ? 'kN·m³/EI' : sol.display.deflShortUnit;
+
+    return [
+      {
+        title: `Step 1 — Cut the Mirror (Conjugate) Beam at x = ${fmt(xP, 3)} m`,
+        badge: `Section Cut [0, ${fmt(xP, 2)}] m`,
+        description: `Take a free-body cut on the mirror beam from x = 0 to x = ${fmt(xP, 3)} m. Start with left-end mirror shear V*(0⁺) = θ(0) and moment M*(0⁺) = y(0), plus the elastic load w* = M/EI on [0, ${fmt(xP, 3)}]:`,
+        equations: [
+          `V^*(0^+) = ${fmtSlopeTex(V0_star, sol)}, \\qquad M^*(0^+) = ${fmtDeflTex(M0_star, sol)}`
+        ],
+        table:
+          subLeft.rows.length > 0
+            ? {
+                headers: ['Loaded Segment (m)', `Elastic Force W* (${areaUnit})`, 'Balance Point x̄ (m)', 'Arm (x - x̄) (m)', `Moment about Cut (${deflUnit})`],
+                rows: subLeft.rows.map((r) => [
+                  r.interval,
+                  input.isConstantEI ? `${fmt(r.area, 4)} / EI` : fmtSci(r.area),
+                  fmt(r.xBar, 4),
+                  fmt(r.arm, 4),
+                  input.isConstantEI ? `${fmt(r.contribution, 4)} / EI` : fmt(r.contribution * sol.display.deflScale, 4)
+                ])
+              }
+            : null
+      },
+      {
+        title: `Step 2 — Mirror Shear V*(${fmt(xP, 3)}) = Real Slope θ`,
+        badge: 'Beam Tilt (Slope)',
+        description: `Sum vertical forces on the cut [0, ${fmt(xP, 3)} m] to obtain conjugate shear V*, which equals the actual slope:`,
+        equations: [
+          `V^*(${fmt(xP, 3)}) = V^*(0^+) + \\int_0^{${fmt(xP, 2)}} \\frac{M(x)}{EI}\\,dx = ${fmtSlopeTex(cjP.V_star, sol)}`,
+          `\\theta(${fmt(xP, 3)}\\text{ m}) = V^*(${fmt(xP, 3)}) = ${fmtSlopeTex(cjP.V_star, sol)}`
+        ]
+      },
+      {
+        title: `Step 3 — Mirror Moment M*(${fmt(xP, 3)}) = Real Deflection y`,
+        badge: 'Beam Bend (Deflection)',
+        description: `Sum moments about the cut x = ${fmt(xP, 3)} m to obtain conjugate bending moment M*, which equals the actual deflection:`,
+        equations: [
+          `M^*(${fmt(xP, 3)}) = M^*(0^+) + V^*(0^+)\\cdot(${fmt(xP, 2)}) + \\int_0^{${fmt(xP, 2)}} \\frac{M(x)}{EI}(${fmt(xP, 2)} - x)\\,dx`,
+          `y(${fmt(xP, 3)}\\text{ m}) = M^*(${fmt(xP, 3)}) = ${fmtDeflTex(cjP.M_star, sol)}`
+        ]
+      }
+    ];
   }
 
   /**
@@ -368,6 +590,7 @@
     buildDoubleIntegrationSteps,
     buildMomentAreaSteps,
     buildConjugateBeamSteps,
+    buildPointSolutionSteps,
     buildEngineeringBrief,
     supportLabel,
     describeLoad,

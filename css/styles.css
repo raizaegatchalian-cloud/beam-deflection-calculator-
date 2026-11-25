@@ -197,37 +197,135 @@ html, body {
 .icon-btn:hover { transform: translateY(-1px); border-color: var(--aurora); }
 
 /* ==========================================================================
-   Welcome Tip Banner (Gentle First-Time Guidance, Dismissible)
+   Start Here Sidebar Highlight Card & Right-Side Terms Guide Bar
    ========================================================================== */
-.welcome-banner {
-  max-width: 1580px;
-  margin: 16px auto 0;
-  padding: 11px 18px;
-  border-radius: 14px;
-  background: linear-gradient(90deg, rgba(142, 164, 196, 0.22), rgba(205, 196, 220, 0.28));
-  border: 1px solid var(--border-strong);
+.start-here-card {
+  background: linear-gradient(135deg, rgba(110, 90, 136, 0.14), rgba(142, 164, 196, 0.20));
+  border: 1.5px solid var(--wisteria);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 15px 17px;
+}
+.start-here-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: var(--wisteria);
+  color: var(--starlight);
+  font-size: 0.70rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.start-here-lead {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  line-height: 1.35;
+}
+
+.right-guide-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  font-size: 0.82rem;
-  line-height: 1.45;
-  margin-left: 26px;
-  margin-right: 26px;
-}
-.welcome-banner strong { color: var(--wisteria); }
-[data-theme="dark"] .welcome-banner strong { color: var(--starlight); }
-.banner-close {
-  border: none;
-  background: transparent;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 15px;
+  background: var(--surface-card);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-card);
+  font-size: 0.80rem;
   color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-weight: 800;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
 }
-.banner-close:hover { background: rgba(110, 90, 136, 0.14); }
+.right-guide-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(110, 90, 136, 0.14), rgba(142, 164, 196, 0.24));
+  border: 1px solid var(--border-strong);
+  color: var(--wisteria);
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+[data-theme="dark"] .right-guide-link { color: var(--starlight); }
+.right-guide-link:hover {
+  background: var(--wisteria);
+  color: var(--starlight);
+  border-color: var(--wisteria);
+}
+
+/* Clean Empty-State Studio Overlay for Blank Initial Launch */
+.stage-empty-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 45%, rgba(243, 238, 248, 0.78), rgba(243, 238, 248, 0.92));
+  backdrop-filter: blur(3px);
+  text-align: center;
+}
+[data-theme="dark"] .stage-empty-overlay {
+  background: radial-gradient(circle at 50% 45%, rgba(28, 22, 42, 0.76), rgba(20, 15, 32, 0.92));
+}
+.stage-empty-card {
+  max-width: 440px;
+  padding: 22px 24px;
+  border-radius: 20px;
+  background: var(--surface-card-solid);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-card);
+}
+.stage-empty-card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.stage-empty-card p {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.empty-panel-card {
+  text-align: center;
+  padding: 34px 20px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+  border: 1px dashed var(--border-strong);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.point-x-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-strong);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.point-x-inline input {
+  width: 78px;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+}
 
 /* ==========================================================================
    Main Two-Column Studio Workspace

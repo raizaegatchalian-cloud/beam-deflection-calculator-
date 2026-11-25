@@ -1,8 +1,12 @@
 /**
- * BeamStudio 3D — Main Application Controller (Calm Guided Studio Edition)
- * Connects the 3-step progressive-disclosure sidebar, Hero 3D WebGL viewer,
- * 3-tab studio workspace (Diagrams | Step-by-Step Solution | AI Solver & Tutor),
- * and multi-provider AI API service.
+ * BeamStudio 3D — Main Application Controller
+ * Features:
+ *  - Clean blank initial state (auto-populates when a Ready-Made Example is chosen or user enters values)
+ *  - Two separate Step-by-Step Solution tabs:
+ *      1) Max Deflection Solution (x_max & δ_max)
+ *      2) Point x Solution (exact Slope & Deflection at ANY inspected point x, synced live with Inspect Point x!)
+ *  - Support for mm, cm, m deflection units + Constant EI symbolic mode (/EI)
+ *  - Multi-provider AI Model API integration & Tutor
  */
 (function (global) {
   'use strict';
@@ -10,34 +14,31 @@
   const { Engine, SolutionBuilder, AIService, Viewer3D, Diagrams } = global.BeamStudio;
 
   // =========================================================================
-  // Application State
+  // Application State (Starts Clean / Blank!)
   // =========================================================================
   const state = {
     dark: false,
     activeMethod: 'double_integration', // 'double_integration' | 'moment_area' | 'conjugate_beam' | 'compare'
-    activeWsTab: 'diagrams', // 'diagrams' | 'solution' | 'ai'
+    activeWsTab: 'diagrams', // 'diagrams' | 'solution_max' | 'solution_point' | 'ai'
     activeLoadType: 'Point',
     constantEI: false,
     deflUnit: 'mm', // 'mm' | 'cm' | 'm'
     section: {
       type: 'ibeam',
-      h: 300,
-      bf: 150,
-      tf: 12,
-      tw: 8,
-      b: 200,
-      D: 260,
-      t: 12,
-      hw: 260,
-      customI: 8.5e-5,
+      h: '',
+      bf: '',
+      tf: '',
+      tw: '',
+      b: '',
+      D: '',
+      t: '',
+      hw: '',
+      customI: '',
       customIUnit: 'm4'
     },
-    loads: [
-      { type: 'UDL', w: 12, a: 0, b: 6 },
-      { type: 'Point', P: 25, a: 3 }
-    ],
+    loads: [],
     solution: null,
-    probeX: 3.0,
+    probeX: 0,
     aiSettings: AIService.loadSettings(),
     tutorHistory: []
   };
@@ -215,8 +216,29 @@
     return finalHtml;
   }
 
+  function fmtDefl(valMeters, sol) {
+    const disp = sol.display;
+    const scaled = valMeters * disp.deflScale;
+    const absS = Math.abs(scaled);
+    const numStr =
+      absS > 0 && absS < 0.001
+        ? scaled.toExponential(3)
+        : disp.deflUnit === 'm' && !disp.isConstantEI
+          ? scaled.toFixed(5)
+          : scaled.toFixed(3);
+    return disp.isConstantEI ? `${numStr} / EI` : `${numStr} ${disp.deflShortUnit}`;
+  }
+
+  function fmtSlope(valRad, sol) {
+    const disp = sol.display;
+    const scaled = valRad * disp.slopeScale;
+    const absS = Math.abs(scaled);
+    const numStr = absS > 0 && absS < 0.001 ? scaled.toExponential(2) : scaled.toFixed(3);
+    return disp.isConstantEI ? `${numStr} / EI` : `${numStr} ${disp.slopeUnitLabel}`;
+  }
+
   // =========================================================================
-  // Workspace Tab Switching (Diagrams | Step-by-Step Solution | AI Studio)
+  // Workspace Tab Switching (4 Clean Tabs)
   // =========================================================================
   function switchWorkspaceTab(tabName) {
     state.activeWsTab = tabName;
@@ -224,54 +246,51 @@
       btn.classList.toggle('active', btn.dataset.wsTab === tabName);
     });
     $('panelDiagrams').classList.toggle('hidden', tabName !== 'diagrams');
-    $('panelSolution').classList.toggle('hidden', tabName !== 'solution');
+    $('panelSolutionMax').classList.toggle('hidden', tabName !== 'solution_max');
+    $('panelSolutionPoint').classList.toggle('hidden', tabName !== 'solution_point');
     $('panelAi').classList.toggle('hidden', tabName !== 'ai');
 
-    // Redraw canvases on next frame when returning to Diagrams so sizes match layout
     if (tabName === 'diagrams' && state.solution) {
       requestAnimationFrame(() => renderActiveMethodDiagrams());
+    } else if (tabName === 'solution_point') {
+      renderPointSolution();
+    } else if (tabName === 'solution_max') {
+      renderMaxSolution();
     }
   }
 
   // =========================================================================
   // Cross-Section UI Builder
   // =========================================================================
+  function getEffectiveSection() {
+    const s = state.section;
+    // Provide clean structural defaults behind the scenes if user leaves optional mm dimensions blank
+    return {
+      type: s.type || 'ibeam',
+      h: Number(s.h) > 0 ? Number(s.h) : 300,
+      bf: Number(s.bf) > 0 ? Number(s.bf) : 150,
+      tf: Number(s.tf) > 0 ? Number(s.tf) : 12,
+      tw: Number(s.tw) > 0 ? Number(s.tw) : 8,
+      b: Number(s.b) > 0 ? Number(s.b) : 200,
+      D: Number(s.D) > 0 ? Number(s.D) : 260,
+      t: Number(s.t) > 0 ? Number(s.t) : 12,
+      hw: Number(s.hw) > 0 ? Number(s.hw) : 260,
+      customI: Number(s.customI) > 0 ? Number(s.customI) : 8.5e-5,
+      customIUnit: s.customIUnit || 'm4'
+    };
+  }
+
   function renderSectionInputs() {
     const type = $('sectionType').value;
     state.section.type = type;
     const container = $('sectionDimsContainer');
-    let fields = [];
 
-    if (type === 'ibeam') {
-      fields = [
-        { key: 'h', label: 'Depth h (mm)', val: state.section.h },
-        { key: 'bf', label: 'Flange b_f (mm)', val: state.section.bf },
-        { key: 'tf', label: 'Flange t_f (mm)', val: state.section.tf },
-        { key: 'tw', label: 'Web t_w (mm)', val: state.section.tw }
-      ];
-    } else if (type === 'rect') {
-      fields = [
-        { key: 'b', label: 'Width b (mm)', val: state.section.b },
-        { key: 'h', label: 'Height h (mm)', val: state.section.h }
-      ];
-    } else if (type === 'tube') {
-      fields = [
-        { key: 'D', label: 'Outer Dia D (mm)', val: state.section.D },
-        { key: 't', label: 'Wall Thick t (mm)', val: state.section.t }
-      ];
-    } else if (type === 'tbeam') {
-      fields = [
-        { key: 'bf', label: 'Flange b_f (mm)', val: state.section.bf },
-        { key: 'tf', label: 'Flange t_f (mm)', val: state.section.tf },
-        { key: 'hw', label: 'Web h_w (mm)', val: state.section.hw },
-        { key: 'tw', label: 'Web t_w (mm)', val: state.section.tw }
-      ];
-    } else {
+    if (type === 'custom') {
       const unit = state.section.customIUnit || 'm4';
       container.innerHTML = `
         <div class="form-group">
           <label for="customIInput">Moment of Inertia I</label>
-          <input class="input-3d sec-dim-input" id="customIInput" data-sec-key="customI" type="number" step="any" min="0.000000000001" value="${state.section.customI}" />
+          <input class="input-3d sec-dim-input" id="customIInput" data-sec-key="customI" type="number" step="any" min="0.000000000001" placeholder="e.g. 8000" value="${state.section.customI}" />
         </div>
         <div class="form-group">
           <label for="customIUnitSelect">Unit of I</label>
@@ -295,54 +314,81 @@
       const inp = $('customIInput');
       const sel = $('customIUnitSelect');
       inp.addEventListener('input', () => {
-        state.section.customI = Number(inp.value);
+        state.section.customI = inp.value;
         updateSectionBadge();
       });
-      inp.addEventListener('change', () => recalculate());
+      inp.addEventListener('change', () => { if (state.solution) recalculate(true); });
       sel.addEventListener('change', () => {
         state.section.customIUnit = sel.value;
         updateSectionBadge();
-        recalculate();
+        if (state.solution) recalculate(true);
       });
       $('switchToCm4Btn').addEventListener('click', () => {
         state.section.customIUnit = 'cm4';
         sel.value = 'cm4';
         updateSectionBadge();
-        recalculate();
+        if (state.solution) recalculate(true);
       });
       $('switchToE6Mm4Btn').addEventListener('click', () => {
         state.section.customIUnit = 'e6mm4';
         sel.value = 'e6mm4';
         updateSectionBadge();
-        recalculate();
+        if (state.solution) recalculate(true);
       });
       $('switchToMm4Btn').addEventListener('click', () => {
         state.section.customIUnit = 'mm4';
         sel.value = 'mm4';
         updateSectionBadge();
-        recalculate();
+        if (state.solution) recalculate(true);
       });
 
       updateSectionBadge();
       return;
     }
 
+    let fields = [];
+    if (type === 'ibeam') {
+      fields = [
+        { key: 'h', label: 'Depth h (mm)', val: state.section.h, ph: '300' },
+        { key: 'bf', label: 'Flange b_f (mm)', val: state.section.bf, ph: '150' },
+        { key: 'tf', label: 'Flange t_f (mm)', val: state.section.tf, ph: '12' },
+        { key: 'tw', label: 'Web t_w (mm)', val: state.section.tw, ph: '8' }
+      ];
+    } else if (type === 'rect') {
+      fields = [
+        { key: 'b', label: 'Width b (mm)', val: state.section.b, ph: '200' },
+        { key: 'h', label: 'Height h (mm)', val: state.section.h, ph: '350' }
+      ];
+    } else if (type === 'tube') {
+      fields = [
+        { key: 'D', label: 'Outer Dia D (mm)', val: state.section.D, ph: '260' },
+        { key: 't', label: 'Wall Thick t (mm)', val: state.section.t, ph: '12' }
+      ];
+    } else if (type === 'tbeam') {
+      fields = [
+        { key: 'bf', label: 'Flange b_f (mm)', val: state.section.bf, ph: '280' },
+        { key: 'tf', label: 'Flange t_f (mm)', val: state.section.tf, ph: '25' },
+        { key: 'hw', label: 'Web h_w (mm)', val: state.section.hw, ph: '280' },
+        { key: 'tw', label: 'Web t_w (mm)', val: state.section.tw, ph: '35' }
+      ];
+    }
+
     container.innerHTML = fields
       .map(
         (f) => `
-      <div class="form-group ${f.span2 ? 'span-2' : ''}">
+      <div class="form-group">
         <label>${f.label}</label>
-        <input class="input-3d sec-dim-input" data-sec-key="${f.key}" type="number" step="${f.step || '1'}" min="0.000000001" value="${f.val}" />
+        <input class="input-3d sec-dim-input" data-sec-key="${f.key}" type="number" step="1" min="1" placeholder="e.g. ${f.ph}" value="${f.val}" />
       </div>`
       )
       .join('');
 
     container.querySelectorAll('.sec-dim-input').forEach((inp) => {
       inp.addEventListener('input', () => {
-        state.section[inp.dataset.secKey] = Number(inp.value);
+        state.section[inp.dataset.secKey] = inp.value;
         updateSectionBadge();
       });
-      inp.addEventListener('change', () => recalculate());
+      inp.addEventListener('change', () => { if (state.solution) recalculate(true); });
     });
 
     updateSectionBadge();
@@ -357,15 +403,22 @@
       if (warnBox) warnBox.classList.add('hidden');
       return;
     }
-    const props = Engine.computeSectionProperties(state.section);
-    const E_GPa = Number($('youngsE').value) || 200;
-    const EI = E_GPa * 1e6 * props.I;
+
+    const E_val = Number($('youngsE').value);
+    if (!(E_val > 0)) {
+      $('computedILabel').textContent = 'I = —';
+      $('computedEILabel').textContent = 'EI = —';
+      $('sectionSummaryMeta').textContent = 'Optional ▾';
+      return;
+    }
+
+    const props = Engine.computeSectionProperties(getEffectiveSection());
+    const EI = E_val * 1e6 * props.I;
     const shortType = { ibeam: 'I-Beam', rect: 'Rect', tube: 'Tube', tbeam: 'T-Beam', custom: 'Custom I' }[state.section.type] || 'Section';
     $('computedILabel').textContent = `I = ${props.I.toExponential(3)} m⁴`;
     $('computedEILabel').textContent = `EI = ${EI.toLocaleString(undefined, { maximumFractionDigits: 1 })} kN·m²`;
     $('sectionSummaryMeta').textContent = `${shortType} ▾`;
 
-    // Warn user if Custom I in m^4 is unrealistically huge (common unit mix-up with cm^4 or mm^4)
     const warnBox = $('hugeIWarning');
     if (warnBox) {
       const isHugeM4 = state.section.type === 'custom' && (state.section.customIUnit || 'm4') === 'm4' && Number(state.section.customI) >= 1;
@@ -412,7 +465,7 @@
   function renderLoadsList() {
     const list = $('loadsList');
     if (state.loads.length === 0) {
-      list.innerHTML = `<div class="hint-text" style="text-align:center; padding:8px;">No loads yet — add at least one load above.</div>`;
+      list.innerHTML = `<div class="hint-text" style="text-align:center; padding:8px;">No loads added yet. Enter a load above or pick a ready-made example.</div>`;
       return;
     }
     list.innerHTML = state.loads
@@ -434,17 +487,22 @@
       btn.addEventListener('click', () => {
         state.loads.splice(Number(btn.dataset.removeIdx), 1);
         renderLoadsList();
-        if (state.loads.length > 0) recalculate();
+        if (state.loads.length > 0 && state.solution) recalculate(true);
+        else if (state.loads.length === 0) renderEmptyState();
       });
     });
   }
 
   function addLoadFromForm() {
-    const L = Number($('beamLength').value) || 6;
+    const L = Number($('beamLength').value);
+    if (!(L > 0)) return showToast('Enter Beam Length L (m) in Step 1 first.');
     const t = state.activeLoadType;
-    const mag = Number($('loadMag').value);
-    const a = Number($('loadA').value);
+    const rawMag = $('loadMag').value.trim();
+    const rawA = $('loadA').value.trim();
+    if (rawMag === '' || rawA === '') return showToast('Enter the load magnitude and position first.');
 
+    const mag = Number(rawMag);
+    const a = Number(rawA);
     if (!isFinite(mag) || !isFinite(a)) return showToast('Enter valid numeric load values.');
     if (a < 0 || a > L) return showToast(`Position a must be within [0, ${L}] m.`);
 
@@ -453,60 +511,138 @@
     } else if (t === 'Moment') {
       state.loads.push({ type: 'Moment', M: mag, a });
     } else {
-      const b = Number($('loadB').value);
+      const rawB = $('loadB').value.trim();
+      if (rawB === '') return showToast('Enter End Position b (m) for the distributed load.');
+      const b = Number(rawB);
       if (!isFinite(b) || b <= a || b > L) {
         return showToast(`Distributed load must satisfy 0 ≤ a < b ≤ ${L} m.`);
       }
       if (t === 'UDL') state.loads.push({ type: 'UDL', w: mag, a, b });
       else {
-        const w2 = Number($('loadW2').value);
+        const rawW2 = $('loadW2').value.trim();
+        if (rawW2 === '') return showToast('Enter End Intensity w₂ (kN/m) for UVL.');
+        const w2 = Number(rawW2);
         if (!isFinite(w2)) return showToast('Enter a valid end intensity w₂.');
         state.loads.push({ type: 'UVL', w1: mag, w2, a, b });
       }
     }
 
     renderLoadsList();
-    recalculate();
-    showToast(`${t} load added & 3D beam updated`);
+    // Auto-calculate if Step 1 is complete
+    if (isStep1Ready()) recalculate(true);
+    else showToast(`${t} load added! Complete Step 1 & click Calculate Beam.`);
+  }
+
+  function isStep1Ready() {
+    const L = Number($('beamLength').value);
+    const sup = $('supportType').value;
+    const E = Number($('youngsE').value);
+    return L > 0 && Boolean(sup) && (state.constantEI || E > 0);
+  }
+
+  // =========================================================================
+  // Empty State Renderer (Initial Clean Blank View)
+  // =========================================================================
+  function renderEmptyState() {
+    state.solution = null;
+    $('stageEmptyOverlay').classList.remove('hidden');
+    $('kpiDefl').textContent = '—';
+    $('kpiDeflSub').textContent = 'Enter inputs or choose an example';
+    $('kpiMoment').textContent = '—';
+    $('kpiMomentSub').textContent = 'Peak section';
+    $('kpiShear').textContent = '—';
+    $('kpiShearSub').textContent = 'Peak section';
+    $('kpiReactions').textContent = '—';
+    $('kpiReactionsSub').textContent = 'Static equilibrium';
+
+    $('sectionProbeSlider').disabled = true;
+    $('probeXVal').textContent = '—';
+    $('pointTabBadge').textContent = 'x = —';
+    $('pointSolutionXInput').value = '';
+    $('probeMetrics').innerHTML = `<span>V: <b>—</b></span><span>M: <b>—</b></span><span>θ: <b>—</b></span><span>δ: <b>—</b></span>`;
+
+    $('diagramsGrid').innerHTML = `
+      <div class="diagram-box full-span">
+        <div class="empty-panel-card">
+          <strong>No diagrams calculated yet.</strong><br/>
+          Pick a ready-made example under <strong>Start Here</strong> on the left — or enter your beam details and click <strong>Calculate Beam</strong>.
+        </div>
+      </div>`;
+
+    $('builtInSolutionMaxContainer').innerHTML = `
+      <div class="empty-panel-card">
+        Calculate a beam first to view the step-by-step computation for <strong>Maximum Deflection &amp; Location</strong>.
+      </div>`;
+
+    $('builtInSolutionPointContainer').innerHTML = `
+      <div class="empty-panel-card">
+        Calculate a beam first, then slide <strong>Inspect Point x</strong> (or type any coordinate above) to view the step-by-step <strong>Slope &amp; Deflection</strong> at that exact point.
+      </div>`;
   }
 
   // =========================================================================
   // Main Calculation & Rendering Pipeline
   // =========================================================================
-  function recalculate() {
+  function recalculate(silentMissing = false) {
+    const L = Number($('beamLength').value);
+    const supportType = $('supportType').value;
+    const E = Number($('youngsE').value);
+
+    if (!(L > 0)) {
+      if (!silentMissing) showToast('Step 1: Enter Beam Length L (m) or pick a ready-made example.');
+      return;
+    }
+    if (!supportType) {
+      if (!silentMissing) showToast('Step 1: Select a Support Condition.');
+      return;
+    }
+    if (!state.constantEI && !(E > 0)) {
+      if (!silentMissing) showToast('Step 1: Select a Material (or check "Treat EI as Constant").');
+      return;
+    }
     if (state.loads.length === 0) {
-      showToast('Add at least one load to calculate the beam.');
+      if (!silentMissing) showToast('Step 2: Add at least one load to the beam.');
       return;
     }
 
     try {
-      const L = Number($('beamLength').value);
-      const E = Number($('youngsE').value);
-      const supportType = $('supportType').value;
-      const queryX = Math.max(0, Math.min(L, Number($('queryXInput').value) || L / 2));
+      const rawQuery = $('queryXInput').value.trim();
+      const queryX = rawQuery !== '' ? Math.max(0, Math.min(L, Number(rawQuery))) : L / 2;
 
       const config = {
         length: L,
-        E,
+        E: state.constantEI ? 1 : E,
         constantEI: state.constantEI,
         deflUnit: state.deflUnit,
-        section: { ...state.section },
+        section: getEffectiveSection(),
         supportType,
-        supportA: Number($('supportAX').value),
-        supportB: Number($('supportBX').value),
+        supportA: $('supportAX').value !== '' ? Number($('supportAX').value) : 0,
+        supportB: $('supportBX').value !== '' ? Number($('supportBX').value) : L * 0.75,
         loads: state.loads,
         queryX
       };
 
       const sol = Engine.solveBeam(config);
       state.solution = sol;
-      state.probeX = Math.max(0, Math.min(L, state.probeX > L ? L / 2 : state.probeX));
+
+      // Sync probeX cleanly
+      if (state.probeX <= 0 || state.probeX > L) {
+        state.probeX = queryX;
+      }
+
+      $('stageEmptyOverlay').classList.add('hidden');
 
       const slider = $('sectionProbeSlider');
+      slider.disabled = false;
+      slider.min = '0';
       slider.max = String(L);
       slider.step = String(Math.max(L / 200, 0.01));
       slider.value = String(state.probeX);
 
+      $('pointSolutionXInput').max = String(L);
+      $('pointSolutionXInput').value = state.probeX.toFixed(2);
+
+      updateSectionBadge();
       updateKPIs(sol);
       updateProbeReadout();
       if (viewer3d) {
@@ -516,31 +652,11 @@
       if (state.activeWsTab === 'diagrams') {
         renderActiveMethodDiagrams();
       }
-      renderBuiltInSolution();
+      renderMaxSolution();
+      renderPointSolution();
     } catch (err) {
       showToast(`Error: ${err.message}`);
     }
-  }
-
-  function fmtDefl(valMeters, sol) {
-    const disp = sol.display;
-    const scaled = valMeters * disp.deflScale;
-    const absS = Math.abs(scaled);
-    const numStr =
-      absS > 0 && absS < 0.001
-        ? scaled.toExponential(3)
-        : disp.deflUnit === 'm' && !disp.isConstantEI
-          ? scaled.toFixed(5)
-          : scaled.toFixed(3);
-    return disp.isConstantEI ? `${numStr} / EI` : `${numStr} ${disp.deflShortUnit}`;
-  }
-
-  function fmtSlope(valRad, sol) {
-    const disp = sol.display;
-    const scaled = valRad * disp.slopeScale;
-    const absS = Math.abs(scaled);
-    const numStr = absS > 0 && absS < 0.001 ? scaled.toExponential(2) : scaled.toFixed(3);
-    return disp.isConstantEI ? `${numStr} / EI` : `${numStr} ${disp.slopeUnitLabel}`;
   }
 
   function updateKPIs(sol) {
@@ -577,11 +693,26 @@
       : 'Static equilibrium';
   }
 
+  function setInspectPointX(newX, updateNumberInput = true) {
+    if (!state.solution) return;
+    const L = state.solution.input.L;
+    state.probeX = Math.max(0, Math.min(L, Number(newX) || 0));
+    $('sectionProbeSlider').value = String(state.probeX);
+    if (updateNumberInput) {
+      $('pointSolutionXInput').value = state.probeX.toFixed(2);
+    }
+    updateProbeReadout();
+    if (viewer3d) viewer3d.setProbeX(state.probeX);
+    if (state.activeWsTab === 'diagrams') redrawCurrentCanvasesOnly();
+    if (state.activeWsTab === 'solution_point') renderPointSolution();
+  }
+
   function updateProbeReadout() {
     if (!state.solution) return;
     const sol = state.solution;
     const st = sol.evalAt(state.probeX);
     $('probeXVal').textContent = `${st.x.toFixed(2)} m`;
+    $('pointTabBadge').textContent = `x = ${st.x.toFixed(2)} m`;
     $('probeMetrics').innerHTML = `
       <span>V: <b>${st.V.toFixed(2)} kN</b></span>
       <span>M: <b>${st.M.toFixed(2)} kN·m</b></span>
@@ -591,7 +722,7 @@
   }
 
   // =========================================================================
-  // Diagrams Renderer (Calm, Clean Grid Tailored to Active Method)
+  // Diagrams Renderer (Plain-English Titles & Subtitles)
   // =========================================================================
   function renderActiveMethodDiagrams() {
     if (!state.solution) return;
@@ -599,7 +730,6 @@
     const grid = $('diagramsGrid');
     const method = state.activeMethod;
     const commonOpts = { dark: state.dark, probeX: state.probeX };
-
     const disp = sol.display;
     const dUnit = disp.deflShortUnit;
     const sUnit = disp.slopeUnitLabel;
@@ -797,11 +927,7 @@
       const frac = Math.max(0, Math.min(1, (mx - meta.pad.l) / meta.plotW));
       const newX = frac * meta.L;
       if (Math.abs(newX - state.probeX) > 0.005) {
-        state.probeX = newX;
-        $('sectionProbeSlider').value = String(newX);
-        updateProbeReadout();
-        if (viewer3d) viewer3d.setProbeX(newX);
-        redrawCurrentCanvasesOnly();
+        setInspectPointX(newX, true);
       }
     });
   }
@@ -832,80 +958,10 @@
   }
 
   // =========================================================================
-  // Built-in Step-by-Step Solution Renderer
+  // Shared Step-Card HTML Renderer
   // =========================================================================
-  function renderBuiltInSolution() {
-    if (!state.solution) return;
-    const sol = state.solution;
-    const container = $('builtInSolutionContainer');
-    const method = state.activeMethod;
-
-    const titles = {
-      double_integration: 'Step-by-Step Solution — Double Integration Method',
-      moment_area: 'Step-by-Step Solution — Moment-Area Method',
-      conjugate_beam: 'Step-by-Step Solution — Conjugate Beam Method',
-      compare: '3-Method Verification Table & Convergence Summary'
-    };
-    $('solutionCardTitle').textContent = titles[method] || titles.double_integration;
-
-    if (method === 'compare') {
-      const cmp = sol.comparison;
-      const q = sol.query;
-      const dUnit = sol.display.deflShortUnit;
-      container.innerHTML = `
-        <div class="step-card">
-          <div class="step-card-head">
-            <span class="step-title">Cross-Method Convergence Table</span>
-            <span class="step-badge">All 3 Methods Match</span>
-          </div>
-          <p class="step-desc">Double Integration, Moment-Area, and Conjugate Beam all independently solve for the same elastic curve:</p>
-          <div class="eng-table-wrap">
-            <table class="eng-table">
-              <thead>
-                <tr>
-                  <th>Method</th>
-                  <th>Max Deflection δ_max (${dUnit})</th>
-                  <th>Location x_max (m)</th>
-                  <th>At Check Point x = ${q.x.toFixed(2)} m</th>
-                  <th>Difference</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>1. Double Integration</strong></td>
-                  <td>${fmtDefl(cmp.doubleIntegration.maxSigned_mm / 1000, sol)}</td>
-                  <td>${cmp.doubleIntegration.maxX.toFixed(4)} m</td>
-                  <td>${fmtDefl(q.y, sol)}</td>
-                  <td>Exact Reference</td>
-                </tr>
-                <tr>
-                  <td><strong>2. Moment-Area Method</strong></td>
-                  <td>${fmtDefl(cmp.momentArea.maxSigned_mm / 1000, sol)}</td>
-                  <td>${cmp.momentArea.maxX.toFixed(4)} m</td>
-                  <td>${fmtDefl(q.momentArea.y, sol)}</td>
-                  <td>${((cmp.momentArea.maxError_mm / 1000) * sol.display.deflScale).toExponential(2)} ${dUnit}</td>
-                </tr>
-                <tr>
-                  <td><strong>3. Conjugate Beam Method</strong></td>
-                  <td>${fmtDefl(cmp.conjugateBeam.maxSigned_mm / 1000, sol)}</td>
-                  <td>${cmp.conjugateBeam.maxX.toFixed(4)} m</td>
-                  <td>${fmtDefl(q.conjugate.M_star, sol)}</td>
-                  <td>${((cmp.conjugateBeam.maxError_mm / 1000) * sol.display.deflScale).toExponential(2)} ${dUnit}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    let steps = [];
-    if (method === 'double_integration') steps = SolutionBuilder.buildDoubleIntegrationSteps(sol);
-    else if (method === 'moment_area') steps = SolutionBuilder.buildMomentAreaSteps(sol);
-    else if (method === 'conjugate_beam') steps = SolutionBuilder.buildConjugateBeamSteps(sol);
-
-    container.innerHTML = steps
+  function renderStepCardsHtml(steps) {
+    return steps
       .map((st) => {
         const eqHtml = (st.equations || []).map((eq) => `<div class="math-block">${renderLatex(eq, true)}</div>`).join('');
         let tblHtml = '';
@@ -932,6 +988,148 @@
           </div>`;
       })
       .join('');
+  }
+
+  // =========================================================================
+  // TAB 2: MAXIMUM DEFLECTION & LOCATION SOLUTION
+  // =========================================================================
+  function renderMaxSolution() {
+    if (!state.solution) return;
+    const sol = state.solution;
+    const container = $('builtInSolutionMaxContainer');
+    const method = state.activeMethod;
+
+    const titles = {
+      double_integration: 'Max Deflection Solution — Double Integration Method',
+      moment_area: 'Max Deflection Solution — Moment-Area Method',
+      conjugate_beam: 'Max Deflection Solution — Conjugate Beam Method',
+      compare: 'Max Deflection Comparison — All 3 Methods'
+    };
+    $('solutionMaxTitle').textContent = titles[method] || titles.double_integration;
+
+    if (method === 'compare') {
+      const cmp = sol.comparison;
+      const dUnit = sol.display.deflShortUnit;
+      container.innerHTML = `
+        <div class="step-card">
+          <div class="step-card-head">
+            <span class="step-title">Maximum Deflection Convergence Across All 3 Methods</span>
+            <span class="step-badge">All 3 Match</span>
+          </div>
+          <p class="step-desc">Double Integration, Moment-Area, and Conjugate Beam all independently locate the same peak deflection:</p>
+          <div class="eng-table-wrap">
+            <table class="eng-table">
+              <thead>
+                <tr>
+                  <th>Method</th>
+                  <th>Max Deflection δ_max (${dUnit})</th>
+                  <th>Location x_max (m)</th>
+                  <th>Difference</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>1. Double Integration</strong></td>
+                  <td>${fmtDefl(cmp.doubleIntegration.maxSigned_mm / 1000, sol)}</td>
+                  <td>${cmp.doubleIntegration.maxX.toFixed(4)} m</td>
+                  <td>Exact Reference</td>
+                </tr>
+                <tr>
+                  <td><strong>2. Moment-Area Method</strong></td>
+                  <td>${fmtDefl(cmp.momentArea.maxSigned_mm / 1000, sol)}</td>
+                  <td>${cmp.momentArea.maxX.toFixed(4)} m</td>
+                  <td>${((cmp.momentArea.maxError_mm / 1000) * sol.display.deflScale).toExponential(2)} ${dUnit}</td>
+                </tr>
+                <tr>
+                  <td><strong>3. Conjugate Beam Method</strong></td>
+                  <td>${fmtDefl(cmp.conjugateBeam.maxSigned_mm / 1000, sol)}</td>
+                  <td>${cmp.conjugateBeam.maxX.toFixed(4)} m</td>
+                  <td>${((cmp.conjugateBeam.maxError_mm / 1000) * sol.display.deflScale).toExponential(2)} ${dUnit}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    let steps = [];
+    if (method === 'double_integration') steps = SolutionBuilder.buildDoubleIntegrationSteps(sol);
+    else if (method === 'moment_area') steps = SolutionBuilder.buildMomentAreaSteps(sol);
+    else if (method === 'conjugate_beam') steps = SolutionBuilder.buildConjugateBeamSteps(sol);
+
+    container.innerHTML = renderStepCardsHtml(steps);
+  }
+
+  // =========================================================================
+  // TAB 3: SLOPE & DEFLECTION AT ANY SELECTED POINT x (SYNCED TO INSPECT POINT x!)
+  // =========================================================================
+  function renderPointSolution() {
+    if (!state.solution) return;
+    const sol = state.solution;
+    const xP = state.probeX;
+    const container = $('builtInSolutionPointContainer');
+    const method = state.activeMethod;
+
+    const titles = {
+      double_integration: `Slope & Deflection at x = ${xP.toFixed(2)} m — Double Integration Method`,
+      moment_area: `Slope & Deflection at x = ${xP.toFixed(2)} m — Moment-Area Method`,
+      conjugate_beam: `Slope & Deflection at x = ${xP.toFixed(2)} m — Conjugate Beam Method`,
+      compare: `Slope & Deflection at x = ${xP.toFixed(2)} m — All 3 Methods Compared`
+    };
+    $('solutionPointTitle').textContent = titles[method] || titles.double_integration;
+
+    if (method === 'compare') {
+      const st = sol.evalAt(xP);
+      const ma = sol.momentArea.evalAt(xP);
+      const cj = sol.conjugateBeam.evalAt(xP);
+      container.innerHTML = `
+        <div class="step-card">
+          <div class="step-card-head">
+            <span class="step-title">Comparison at Selected Point x = ${xP.toFixed(3)} m</span>
+            <span class="step-badge">All 3 Methods Match</span>
+          </div>
+          <p class="step-desc">Independent slope and deflection evaluation at x = ${xP.toFixed(3)} m across all three structural methods:</p>
+          <div class="eng-table-wrap">
+            <table class="eng-table">
+              <thead>
+                <tr>
+                  <th>Method</th>
+                  <th>Slope θ(${xP.toFixed(2)} m)</th>
+                  <th>Deflection y(${xP.toFixed(2)} m)</th>
+                  <th>Shear V / Moment M</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>1. Double Integration</strong></td>
+                  <td>${fmtSlope(st.theta, sol)}</td>
+                  <td>${fmtDefl(st.y, sol)}</td>
+                  <td>V = ${st.V.toFixed(2)} kN · M = ${st.M.toFixed(2)} kN·m</td>
+                </tr>
+                <tr>
+                  <td><strong>2. Moment-Area Method</strong></td>
+                  <td>${fmtSlope(ma.theta, sol)}</td>
+                  <td>${fmtDefl(ma.y, sol)}</td>
+                  <td>t = ${fmtDefl(ma.t_x_ref, sol)}</td>
+                </tr>
+                <tr>
+                  <td><strong>3. Conjugate Beam Method</strong></td>
+                  <td>${fmtSlope(cj.V_star, sol)}</td>
+                  <td>${fmtDefl(cj.M_star, sol)}</td>
+                  <td>V* = θ · M* = y</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const steps = SolutionBuilder.buildPointSolutionSteps(sol, method, xP);
+    container.innerHTML = renderStepCardsHtml(steps);
   }
 
   // =========================================================================
@@ -985,7 +1183,10 @@
   }
 
   async function runAiDerivation(mode) {
-    if (!state.solution) recalculate();
+    if (!state.solution) {
+      showToast('Calculate a beam (or pick a ready-made example) first.');
+      return;
+    }
     const s = state.aiSettings;
     if (!s.apiKey && s.provider !== 'custom') {
       openAiModal();
@@ -1032,6 +1233,10 @@
   }
 
   async function sendTutorMessage(overrideQuestion) {
+    if (!state.solution) {
+      showToast('Calculate a beam or pick a ready-made example first.');
+      return;
+    }
     const input = $('tutorInput');
     const q = (overrideQuestion !== undefined ? overrideQuestion : input.value).trim();
     if (!q) return;
@@ -1081,13 +1286,14 @@
   function closeGuideModal() { $('guideModalBackdrop').classList.remove('open'); }
 
   // =========================================================================
-  // Preset Loader
+  // Preset Loader (Auto-populates all fields cleanly!)
   // =========================================================================
   function loadPreset(key) {
     const p = PRESETS[key];
     if (!p) return;
     state.constantEI = false;
     $('constantEICheckbox').checked = false;
+    $('presetSelect').value = key;
     $('beamLength').value = p.length;
     $('youngsE').value = p.E;
     $('materialPreset').value = ['200', '69', '28', '11'].includes(String(p.E)) ? String(p.E) : 'custom';
@@ -1106,7 +1312,7 @@
     state.tutorHistory = [];
     renderTutorMessages(false);
     renderLoadsList();
-    recalculate();
+    recalculate(false);
     showToast(`Loaded: ${p.label}`);
   }
 
@@ -1123,7 +1329,6 @@
     });
     $('activeMethodPill').textContent = METHOD_SHORT_NAMES[method] || method;
 
-    // Sync 3D viewport mode intuitively
     const map3d = {
       double_integration: 'real',
       moment_area: 'moment_area',
@@ -1136,26 +1341,17 @@
     });
     if (viewer3d) viewer3d.setViewMode(target3d);
 
-    if (state.activeWsTab === 'diagrams') renderActiveMethodDiagrams();
-    renderBuiltInSolution();
+    if (state.solution) {
+      if (state.activeWsTab === 'diagrams') renderActiveMethodDiagrams();
+      renderMaxSolution();
+      renderPointSolution();
+    }
   }
 
   // =========================================================================
-  // Initialization
+  // Initialization (Starts Completely Blank & Ready!)
   // =========================================================================
   function init() {
-    // Dismissible Welcome Tip
-    try {
-      if (localStorage.getItem('beamstudio_welcome_dismissed') === '1') {
-        $('welcomeBanner').classList.add('hidden');
-      }
-    } catch (_) {}
-    $('dismissBannerBtn').addEventListener('click', () => {
-      $('welcomeBanner').classList.add('hidden');
-      try { localStorage.setItem('beamstudio_welcome_dismissed', '1'); } catch (_) {}
-    });
-
-    // Initialize 3D WebGL Viewer
     viewer3d = new Viewer3D($('viewer3dContainer'));
 
     renderSectionInputs();
@@ -1163,24 +1359,25 @@
     renderLoadsList();
     updateAiStatusBadge();
 
-    // Example Preset Dropdown
+    // Example Preset Dropdown & Empty-State Starter Button
     $('presetSelect').addEventListener('change', (e) => {
       if (e.target.value) loadPreset(e.target.value);
     });
+    $('quickStartExampleBtn').addEventListener('click', () => loadPreset('ss_point'));
 
     // Step 1 Controls
     $('supportType').addEventListener('change', () => {
       toggleOverhangInputs();
-      recalculate();
+      if (state.solution) recalculate(true);
     });
-    $('supportAX').addEventListener('change', recalculate);
-    $('supportBX').addEventListener('change', recalculate);
-    $('beamLength').addEventListener('change', () => {
-      const L = Number($('beamLength').value) || 6;
-      $('loadB').value = String(L);
-      recalculate();
+    $('supportAX').addEventListener('change', () => { if (state.solution) recalculate(true); });
+    $('supportBX').addEventListener('change', () => { if (state.solution) recalculate(true); });
+    $('beamLength').addEventListener('change', () => { if (state.solution) recalculate(true); });
+    $('queryXInput').addEventListener('change', () => {
+      if (state.solution && $('queryXInput').value !== '') {
+        setInspectPointX(Number($('queryXInput').value), true);
+      }
     });
-    $('queryXInput').addEventListener('change', recalculate);
 
     $('materialPreset').addEventListener('change', () => {
       const val = $('materialPreset').value;
@@ -1188,7 +1385,12 @@
         state.constantEI = true;
         $('constantEICheckbox').checked = true;
         updateSectionBadge();
-        recalculate();
+        if (state.solution) recalculate(true);
+      } else if (val === '') {
+        state.constantEI = false;
+        $('constantEICheckbox').checked = false;
+        $('youngsE').value = '';
+        updateSectionBadge();
       } else {
         state.constantEI = false;
         $('constantEICheckbox').checked = false;
@@ -1198,7 +1400,7 @@
         } else {
           $('youngsE').value = val;
           updateSectionBadge();
-          recalculate();
+          if (state.solution) recalculate(true);
         }
       }
     });
@@ -1208,11 +1410,11 @@
       if (state.constantEI) {
         $('materialPreset').value = 'constant_ei';
       } else {
-        const curE = String(Number($('youngsE').value) || 200);
-        $('materialPreset').value = ['200', '69', '28', '11'].includes(curE) ? curE : 'custom';
+        const curE = String(Number($('youngsE').value) || '');
+        $('materialPreset').value = ['200', '69', '28', '11'].includes(curE) ? curE : curE ? 'custom' : '';
       }
       updateSectionBadge();
-      recalculate();
+      if (state.solution) recalculate(true);
     });
 
     $('deflUnitPills').querySelectorAll('.unit-pill').forEach((btn) => {
@@ -1220,14 +1422,15 @@
         $('deflUnitPills').querySelectorAll('.unit-pill').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         state.deflUnit = btn.dataset.deflUnit;
-        recalculate();
+        if (state.solution) recalculate(true);
       });
     });
+
     $('youngsE').addEventListener('input', updateSectionBadge);
-    $('youngsE').addEventListener('change', recalculate);
+    $('youngsE').addEventListener('change', () => { if (state.solution) recalculate(true); });
     $('sectionType').addEventListener('change', () => {
       renderSectionInputs();
-      recalculate();
+      if (state.solution) recalculate(true);
     });
 
     // Step 2: Load Builder
@@ -1243,6 +1446,7 @@
     $('clearLoadsBtn').addEventListener('click', () => {
       state.loads = [];
       renderLoadsList();
+      renderEmptyState();
       showToast('All loads cleared');
     });
 
@@ -1250,9 +1454,9 @@
     $('methodRadioList').querySelectorAll('.method-radio').forEach((btn) => {
       btn.addEventListener('click', () => selectMethod(btn.dataset.method));
     });
-    $('calculateBtn').addEventListener('click', recalculate);
+    $('calculateBtn').addEventListener('click', () => recalculate(false));
 
-    // Calm 3-Tab Studio Switcher
+    // 4-Tab Workspace Switcher
     $('workspaceTabs').querySelectorAll('.ws-tab').forEach((btn) => {
       btn.addEventListener('click', () => switchWorkspaceTab(btn.dataset.wsTab));
     });
@@ -1288,12 +1492,14 @@
       if (viewer3d) viewer3d.setAutoOrbit(active);
     });
 
-    // Section Inspector Slider
+    // Synchronized Section Inspector Slider + Inline Point-x Input
     $('sectionProbeSlider').addEventListener('input', (e) => {
-      state.probeX = Number(e.target.value);
-      updateProbeReadout();
-      if (viewer3d) viewer3d.setProbeX(state.probeX);
-      redrawCurrentCanvasesOnly();
+      setInspectPointX(Number(e.target.value), true);
+    });
+    $('pointSolutionXInput').addEventListener('input', (e) => {
+      if (e.target.value !== '' && state.solution) {
+        setInspectPointX(Number(e.target.value), false);
+      }
     });
 
     // AI Tab Buttons & Starter Chips
@@ -1380,8 +1586,8 @@
       resizeTimer = setTimeout(() => redrawCurrentCanvasesOnly(), 120);
     });
 
-    // Initial solve
-    recalculate();
+    // Start completely blank on page open!
+    renderEmptyState();
   }
 
   document.addEventListener('DOMContentLoaded', init);
