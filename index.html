@@ -75,6 +75,7 @@
             <option value="ss_combined">Simply Supported + UDL, Point &amp; Moment</option>
             <option value="cantilever_uvl">Cantilever + Triangular UVL &amp; Tip Load</option>
             <option value="overhang">Overhanging Beam + Combined Loads</option>
+            <option value="us_ss_point">English Units: Simply Supported 20 ft + 10 kip</option>
           </select>
         </div>
         <div class="hint-text" style="margin-top:6px;">Or fill in your own beam details in Steps 1–3 below.</div>
@@ -87,12 +88,26 @@
             <span class="step-num">1</span>
             <span class="step-heading-title">Beam &amp; Supports</span>
           </div>
+          <div class="unit-pills" id="unitSystemPills" title="Choose Metric (SI) or English (US) units">
+            <button class="unit-pill active" data-unit-sys="si" type="button">SI (m, kN)</button>
+            <button class="unit-pill" data-unit-sys="us" type="button">English (ft, kip)</button>
+          </div>
         </div>
         <div class="step-helper">Enter your span length, stiffness, and support condition.</div>
 
         <div class="form-grid">
+          <div class="form-group span-2 hidden" id="usForceUnitGroup">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 10px; border-radius:9px; background:var(--surface-soft); border:1px solid var(--border-subtle); font-size:0.74rem; font-weight:700;">
+              <span>English Load Force Unit:</span>
+              <div class="unit-pills" id="usForcePills">
+                <button class="unit-pill active" data-us-force="kip" type="button">kip</button>
+                <button class="unit-pill" data-us-force="lb" type="button">lb</button>
+              </div>
+            </div>
+          </div>
+
           <div class="form-group">
-            <label for="beamLength">Length L (m)</label>
+            <label for="beamLength" id="beamLengthLabel">Length L (m)</label>
             <input class="input-3d" id="beamLength" type="number" step="0.1" min="0.2" placeholder="e.g. 6" value="" />
           </div>
           <div class="form-group">
@@ -127,11 +142,11 @@
           </div>
 
           <div class="form-group hidden" id="overhangAGroup">
-            <label for="supportAX">Pin Position x_A (m)</label>
+            <label for="supportAX" id="supportAXLabel">Pin Position x_A (m)</label>
             <input class="input-3d" id="supportAX" type="number" step="0.1" min="0" placeholder="e.g. 0" value="" />
           </div>
           <div class="form-group hidden" id="overhangBGroup">
-            <label for="supportBX">Roller Position x_B (m)</label>
+            <label for="supportBX" id="supportBXLabel">Roller Position x_B (m)</label>
             <input class="input-3d" id="supportBX" type="number" step="0.1" min="0.1" placeholder="e.g. 4.5" value="" />
           </div>
         </div>
@@ -145,11 +160,11 @@
           <div class="disclosure-body">
             <div class="form-grid">
               <div class="form-group">
-                <label for="youngsE">Modulus E (GPa)</label>
+                <label for="youngsE" id="youngsELabel">Modulus E (GPa)</label>
                 <input class="input-3d" id="youngsE" type="number" step="1" min="0.1" placeholder="e.g. 200" value="" />
               </div>
               <div class="form-group">
-                <label for="queryXInput">Check Point x (m)</label>
+                <label for="queryXInput" id="queryXLabel">Check Point x (m)</label>
                 <input class="input-3d" id="queryXInput" type="number" step="0.1" min="0" placeholder="e.g. 3" value="" />
               </div>
               <div class="form-group span-2">
@@ -159,7 +174,7 @@
                   <option value="rect">Rectangular Beam</option>
                   <option value="tube">Circular / Hollow Tube</option>
                   <option value="tbeam">T-Beam Section</option>
-                  <option value="custom">Custom I Value (m⁴ / cm⁴ / mm⁴ / in⁴)</option>
+                  <option value="custom">Custom I Value (m⁴ / cm⁴ / mm⁴ / in⁴ / ft⁴)</option>
                 </select>
               </div>
             </div>
@@ -202,11 +217,11 @@
             <input class="input-3d" id="loadA" type="number" step="0.1" placeholder="e.g. 3" value="" />
           </div>
           <div class="form-group hidden" id="loadBGroup">
-            <label for="loadB">End Position b (m)</label>
+            <label for="loadB" id="loadBLabel">End Position b (m)</label>
             <input class="input-3d" id="loadB" type="number" step="0.1" placeholder="e.g. 6" value="" />
           </div>
           <div class="form-group hidden" id="loadW2Group">
-            <label for="loadW2">End Intensity w₂ (kN/m)</label>
+            <label for="loadW2" id="loadW2Label">End Intensity w₂ (kN/m)</label>
             <input class="input-3d" id="loadW2" type="number" step="1" placeholder="e.g. 15" value="" />
           </div>
         </div>
@@ -425,7 +440,7 @@
           <div class="point-x-inline no-print">
             <label for="pointSolutionXInput">Point x =</label>
             <input class="input-3d" id="pointSolutionXInput" type="number" step="0.05" min="0" placeholder="0.00" />
-            <span>m</span>
+            <span id="pointSolutionXUnit">m</span>
           </div>
         </div>
         <div id="builtInSolutionPointContainer"></div>

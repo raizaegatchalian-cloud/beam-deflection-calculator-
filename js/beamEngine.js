@@ -27,14 +27,24 @@
   const EPS = 1e-10;
 
   /**
-   * Unit conversion factors to m^4 for Custom Moment of Inertia I
+   * Unit conversion factors to m^4 (SI) or in^4 (English) for Custom Moment of Inertia I
    */
   const I_UNIT_TO_M4 = {
     m4: 1,
     cm4: 1e-8,
     e6mm4: 1e-6,
     mm4: 1e-12,
-    in4: 4.162314256e-7
+    in4: 4.162314256e-7,
+    ft4: 0.0086309748412416
+  };
+
+  const I_UNIT_TO_IN4 = {
+    in4: 1,
+    ft4: 20736, // 12^4
+    m4: 2402509.60797,
+    cm4: 0.0240250960797,
+    e6mm4: 2.40250960797,
+    mm4: 2.40250960797e-6
   };
 
   const I_UNIT_LABELS = {
@@ -42,74 +52,85 @@
     cm4: 'cm⁴',
     e6mm4: '×10⁶ mm⁴',
     mm4: 'mm⁴',
-    in4: 'in⁴'
+    in4: 'in⁴',
+    ft4: 'ft⁴'
   };
 
   /**
-   * Compute cross-section geometric properties (all dimensions in mm, returns I in m^4 & area in m^2)
+   * Compute cross-section geometric properties.
+   * For unitSystem === 'si': dims in mm, returns I in m^4.
+   * For unitSystem === 'us': dims in in, returns I in in^4.
    */
-  function computeSectionProperties(section) {
+  function computeSectionProperties(section, unitSystem = 'si') {
+    const isUS = unitSystem === 'us';
     const type = section.type || 'ibeam';
+    const dimDiv = isUS ? 1 : 1000; // US dims already in inches -> in^4; SI dims in mm -> m^4
+    const dimUnit = isUS ? 'in' : 'mm';
+    const iUnitStr = isUS ? 'in⁴' : 'm⁴';
+
     if (type === 'custom') {
-      const unit = section.customIUnit || 'm4';
-      const factor = I_UNIT_TO_M4[unit] || 1;
+      const unit = section.customIUnit || (isUS ? 'in4' : 'm4');
+      const factor = isUS ? (I_UNIT_TO_IN4[unit] || 1) : (I_UNIT_TO_M4[unit] || 1);
       const rawVal = Number(section.customI);
-      const I = (rawVal > 0 ? rawVal : 8.5e-5) * factor;
+      const fallback = isUS ? 500 : 8.5e-5;
+      const usedRaw = rawVal > 0 ? rawVal : fallback;
+      const I = usedRaw * factor;
       return {
         type: 'custom',
         I,
-        rawI: rawVal > 0 ? rawVal : 8.5e-5,
+        rawI: usedRaw,
         customIUnit: unit,
-        area: 0.01,
-        depth: 0.30,
-        width: 0.15,
-        label: `Custom Section (I = ${rawVal > 0 ? rawVal : 8.5e-5} ${I_UNIT_LABELS[unit] || 'm⁴'} = ${I.toExponential(3)} m⁴)`
+        iUnitStr,
+        area: isUS ? 15 : 0.01,
+        depth: isUS ? 12 : 0.30,
+        width: isUS ? 6 : 0.15,
+        label: `Custom Section (I = ${usedRaw} ${I_UNIT_LABELS[unit] || iUnitStr})`
       };
     }
 
     if (type === 'ibeam') {
-      const h = (Number(section.h) || 300) / 1000;
-      const bf = (Number(section.bf) || 150) / 1000;
-      const tf = Math.min((Number(section.tf) || 12) / 1000, h * 0.45);
-      const tw = Math.min((Number(section.tw) || 8) / 1000, bf * 0.9);
+      const h = (Number(section.h) || (isUS ? 12 : 300)) / dimDiv;
+      const bf = (Number(section.bf) || (isUS ? 6 : 150)) / dimDiv;
+      const tf = Math.min((Number(section.tf) || (isUS ? 0.5 : 12)) / dimDiv, h * 0.45);
+      const tw = Math.min((Number(section.tw) || (isUS ? 0.35 : 8)) / dimDiv, bf * 0.9);
       const hw = Math.max(h - 2 * tf, 1e-4);
       const I = (bf * Math.pow(h, 3) - (bf - tw) * Math.pow(hw, 3)) / 12;
       const area = 2 * bf * tf + hw * tw;
       return {
-        type, I, area, depth: h, width: bf, tf, tw,
-        label: `I-Beam ${Math.round(h * 1000)}×${Math.round(bf * 1000)} mm`
+        type, I, iUnitStr, area, depth: h, width: bf, tf, tw,
+        label: `I-Beam ${Number((h * dimDiv).toFixed(2))}×${Number((bf * dimDiv).toFixed(2))} ${dimUnit}`
       };
     }
 
     if (type === 'rect') {
-      const b = (Number(section.b) || 200) / 1000;
-      const h = (Number(section.h) || 350) / 1000;
+      const b = (Number(section.b) || (isUS ? 8 : 200)) / dimDiv;
+      const h = (Number(section.h) || (isUS ? 14 : 350)) / dimDiv;
       const I = (b * Math.pow(h, 3)) / 12;
       return {
-        type, I, area: b * h, depth: h, width: b,
-        label: `Rectangular ${Math.round(b * 1000)}×${Math.round(h * 1000)} mm`
+        type, I, iUnitStr, area: b * h, depth: h, width: b,
+        label: `Rectangular ${Number((b * dimDiv).toFixed(2))}×${Number((h * dimDiv).toFixed(2))} ${dimUnit}`
       };
     }
 
     if (type === 'tube') {
-      const D = (Number(section.D) || 260) / 1000;
-      const t = Math.min((Number(section.t) || 12) / 1000, D / 2);
+      const D = (Number(section.D) || (isUS ? 10 : 260)) / dimDiv;
+      const t = Math.min((Number(section.t) || (isUS ? 0.5 : 12)) / dimDiv, D / 2);
       const di = Math.max(D - 2 * t, 0);
       const I = (Math.PI * (Math.pow(D, 4) - Math.pow(di, 4))) / 64;
       const area = (Math.PI * (D * D - di * di)) / 4;
       return {
-        type, I, area, depth: D, width: D, t,
+        type, I, iUnitStr, area, depth: D, width: D, t,
         label: di > 1e-5
-          ? `Circular Tube Ø${Math.round(D * 1000)}×${Math.round(t * 1000)} mm`
-          : `Solid Circular Ø${Math.round(D * 1000)} mm`
+          ? `Circular Tube Ø${Number((D * dimDiv).toFixed(2))}×${Number((t * dimDiv).toFixed(2))} ${dimUnit}`
+          : `Solid Circular Ø${Number((D * dimDiv).toFixed(2))} ${dimUnit}`
       };
     }
 
     if (type === 'tbeam') {
-      const bf = (Number(section.bf) || 260) / 1000;
-      const tf = (Number(section.tf) || 25) / 1000;
-      const tw = Math.min((Number(section.tw) || 30) / 1000, bf);
-      const hw = (Number(section.hw) || 260) / 1000;
+      const bf = (Number(section.bf) || (isUS ? 10 : 260)) / dimDiv;
+      const tf = (Number(section.tf) || (isUS ? 1 : 25)) / dimDiv;
+      const tw = Math.min((Number(section.tw) || (isUS ? 1.25 : 30)) / dimDiv, bf);
+      const hw = (Number(section.hw) || (isUS ? 10 : 260)) / dimDiv;
       const A1 = bf * tf;
       const y1 = hw + tf / 2;
       const A2 = tw * hw;
@@ -119,12 +140,12 @@
       const I1 = (bf * Math.pow(tf, 3)) / 12 + A1 * Math.pow(y1 - yc, 2);
       const I2 = (tw * Math.pow(hw, 3)) / 12 + A2 * Math.pow(y2 - yc, 2);
       return {
-        type, I: I1 + I2, area, depth: hw + tf, width: bf, tf, tw, hw, yc,
-        label: `T-Beam ${Math.round((hw + tf) * 1000)}×${Math.round(bf * 1000)} mm`
+        type, I: I1 + I2, iUnitStr, area, depth: hw + tf, width: bf, tf, tw, hw, yc,
+        label: `T-Beam ${Number(((hw + tf) * dimDiv).toFixed(2))}×${Number((bf * dimDiv).toFixed(2))} ${dimUnit}`
       };
     }
 
-    return { type: 'custom', I: 8.5e-5, area: 0.01, depth: 0.3, width: 0.15, label: 'Custom' };
+    return { type: 'custom', I: isUS ? 500 : 8.5e-5, iUnitStr, area: 0.01, depth: 0.3, width: 0.15, label: 'Custom' };
   }
 
   /**
@@ -433,24 +454,46 @@
    * Main Solver: solves beam with exact piecewise analytical polynomials AND verifies across all 3 methods
    */
   function solveBeam(config) {
+    const unitSystem = config.unitSystem === 'us' ? 'us' : 'si';
+    const isUS = unitSystem === 'us';
+    const usForceUnit = config.usForceUnit === 'lb' ? 'lb' : 'kip';
+
+    // Consistent engineering unit metadata
+    const lengthUnit = isUS ? 'ft' : 'm';
+    const forceUnit = isUS ? usForceUnit : 'kN';
+    const distUnit = `${forceUnit}/${lengthUnit}`;
+    const momentUnit = `${forceUnit}·${lengthUnit}`;
+    const eiUnit = `${forceUnit}·${lengthUnit}²`;
+    const eInputUnit = isUS ? 'ksi' : 'GPa';
+    const iBaseUnit = isUS ? 'in⁴' : 'm⁴';
+
     const L = Number(config.length);
     const isConstantEI = Boolean(config.constantEI);
-    const E_GPa = isConstantEI ? 1 : Number(config.E);
-    const sectionProps = computeSectionProperties(config.section || { type: 'custom', customI: config.I });
+    const E_input = isConstantEI ? 1 : Number(config.E);
+    const sectionProps = computeSectionProperties(config.section || { type: 'custom', customI: config.I }, unitSystem);
     const I = isConstantEI
       ? 1
       : config.section && config.section.type !== 'custom'
         ? sectionProps.I
         : Number(config.I || sectionProps.I);
-    const E = isConstantEI ? 1 : E_GPa * 1e6; // GPa -> kN/m^2
-    const EI = isConstantEI ? 1 : E * I; // kN·m^2 (or 1 for symbolic constant EI)
+
+    // Convert E*I to consistent [forceUnit * lengthUnit^2]:
+    // SI:  E [GPa] * 1e6 [kN/m^2 / GPa] * I [m^4] = kN·m^2
+    // US:  E [ksi] * (lb ? 1000 : 1) * I [in^4] / 144 [in^2/ft^2] = (kip or lb)·ft^2
+    const E = isConstantEI ? 1 : isUS ? E_input * (usForceUnit === 'lb' ? 1000 : 1) : E_input * 1e6;
+    const EI = isConstantEI ? 1 : isUS ? (E * I) / 144 : E * I;
 
     if (!(L > 0) || (!isConstantEI && (!(E > 0) || !(I > 0)))) {
       throw new Error('Beam length L, Young’s modulus E, and moment of inertia I must be positive.');
     }
 
-    const deflUnit = ['mm', 'cm', 'm'].includes(config.deflUnit) ? config.deflUnit : 'mm';
-    const deflScale = isConstantEI ? 1 : deflUnit === 'mm' ? 1000 : deflUnit === 'cm' ? 100 : 1;
+    const validDeflUnits = isUS ? ['in', 'ft'] : ['mm', 'cm', 'm'];
+    const deflUnit = validDeflUnits.includes(config.deflUnit) ? config.deflUnit : (isUS ? 'in' : 'mm');
+    let deflScale = 1;
+    if (!isConstantEI) {
+      if (isUS) deflScale = deflUnit === 'in' ? 12 : 1; // internal y is in ft
+      else deflScale = deflUnit === 'mm' ? 1000 : deflUnit === 'cm' ? 100 : 1; // internal y is in m
+    }
     const deflShortUnit = isConstantEI ? '/EI' : deflUnit;
     const slopeScale = isConstantEI ? 1 : 1000;
     const slopeUnitLabel = isConstantEI ? '/EI' : 'mrad';
@@ -951,9 +994,13 @@
     return {
       input: {
         L,
+        unitSystem,
+        isUS,
+        usForceUnit,
         isConstantEI,
         deflUnit,
-        E_GPa,
+        E_GPa: E_input,
+        E_input,
         E,
         I,
         EI,
@@ -963,6 +1010,18 @@
         loads,
         queryX
       },
+      units: {
+        system: unitSystem,
+        isUS,
+        length: lengthUnit,
+        force: forceUnit,
+        dist: distUnit,
+        moment: momentUnit,
+        ei: eiUnit,
+        eiDefl: `${forceUnit}·${lengthUnit}³`,
+        eInput: eInputUnit,
+        iBase: iBaseUnit
+      },
       display: {
         isConstantEI,
         deflUnit,
@@ -971,7 +1030,7 @@
         slopeScale,
         slopeUnitLabel,
         curvScale: isConstantEI ? 1 : 1000,
-        curvUnitLabel: isConstantEI ? 'kN·m / EI' : '×10⁻³ rad/m'
+        curvUnitLabel: isConstantEI ? `${momentUnit} / EI` : `×10⁻³ rad/${lengthUnit}`
       },
       isIndeterminate,
       indeterminacyDegree,

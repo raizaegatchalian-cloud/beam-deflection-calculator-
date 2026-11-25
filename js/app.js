@@ -1,11 +1,11 @@
 /**
  * BeamStudio 3D — Main Application Controller
  * Features:
- *  - Clean blank initial state (auto-populates when a Ready-Made Example is chosen or user enters values)
- *  - Two separate Step-by-Step Solution tabs:
- *      1) Max Deflection Solution (x_max & δ_max)
- *      2) Point x Solution (exact Slope & Deflection at ANY inspected point x, synced live with Inspect Point x!)
- *  - Support for mm, cm, m deflection units + Constant EI symbolic mode (/EI)
+ *  - Clean blank initial state (auto-populates on Ready-Made Example or user input)
+ *  - SI (Metric: m, kN, GPa, mm/cm/m) & English (US: ft, kip/lb, ksi, in/ft) unit systems + Constant EI (/EI)
+ *  - Exact 0 snap for floating-point noise & crisp × 10^n scientific notation (no raw e-3)
+ *  - Clean magnitude + direction on Max Deflection KPI (no redundant "-" with "Downward")
+ *  - Two separate Step-by-Step Solution tabs: Max Deflection Solution & Point x Solution
  *  - Multi-provider AI Model API integration & Tutor
  */
 (function (global) {
@@ -18,11 +18,13 @@
   // =========================================================================
   const state = {
     dark: false,
+    unitSystem: 'si', // 'si' | 'us'
+    usForceUnit: 'kip', // 'kip' | 'lb'
     activeMethod: 'double_integration', // 'double_integration' | 'moment_area' | 'conjugate_beam' | 'compare'
     activeWsTab: 'diagrams', // 'diagrams' | 'solution_max' | 'solution_point' | 'ai'
     activeLoadType: 'Point',
     constantEI: false,
-    deflUnit: 'mm', // 'mm' | 'cm' | 'm'
+    deflUnit: 'mm', // SI: 'mm'|'cm'|'m'  |  US: 'in'|'ft'
     section: {
       type: 'ibeam',
       h: '',
@@ -47,11 +49,12 @@
   let toastTimer = null;
 
   // =========================================================================
-  // Ready-Made Engineering Examples
+  // Ready-Made Engineering Examples (Determinate Beams — SI & English!)
   // =========================================================================
   const PRESETS = {
     ss_point: {
       label: 'Simply Supported + Midspan Point Load',
+      unitSystem: 'si',
       length: 6,
       E: 200,
       supportType: 'simply_supported',
@@ -61,6 +64,7 @@
     },
     ss_combined: {
       label: 'Simply Supported + UDL, Point & Moment',
+      unitSystem: 'si',
       length: 8,
       E: 200,
       supportType: 'simply_supported',
@@ -74,6 +78,7 @@
     },
     cantilever_uvl: {
       label: 'Cantilever + Triangular UVL & Tip Load',
+      unitSystem: 'si',
       length: 5,
       E: 200,
       supportType: 'cantilever_left',
@@ -86,6 +91,7 @@
     },
     overhang: {
       label: 'Overhanging Beam + Combined Loads',
+      unitSystem: 'si',
       length: 8,
       E: 200,
       supportType: 'overhanging',
@@ -98,6 +104,17 @@
         { type: 'UDL', w: 14, a: 1.5, b: 6.5 },
         { type: 'Point', P: 22, a: 8 }
       ]
+    },
+    us_ss_point: {
+      label: 'English: Simply Supported 20 ft + 10 kip',
+      unitSystem: 'us',
+      usForceUnit: 'kip',
+      length: 20,
+      E: 29000,
+      supportType: 'simply_supported',
+      queryX: 10,
+      section: { type: 'custom', customI: 500, customIUnit: 'in4' },
+      loads: [{ type: 'Point', P: 10, a: 10 }]
     }
   };
 
@@ -109,7 +126,28 @@
   };
 
   // =========================================================================
-  // Utilities
+  // Active Unit Labels Helper
+  // =========================================================================
+  function getActiveUnits() {
+    const isUS = state.unitSystem === 'us';
+    const force = isUS ? state.usForceUnit : 'kN';
+    const length = isUS ? 'ft' : 'm';
+    return {
+      isUS,
+      length,
+      force,
+      dist: `${force}/${length}`,
+      moment: `${force}·${length}`,
+      ei: `${force}·${length}²`,
+      eiDefl: `${force}·${length}³`,
+      eUnit: isUS ? 'ksi' : 'GPa',
+      dimUnit: isUS ? 'in' : 'mm',
+      iBase: isUS ? 'in⁴' : 'm⁴'
+    };
+  }
+
+  // =========================================================================
+  // Utilities & Clean Scientific Formatting (× 10^n, exact 0 snap)
   // =========================================================================
   const $ = (id) => document.getElementById(id);
 
@@ -127,6 +165,42 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function cleanZero(val) {
+    return Math.abs(val) < 1e-10 ? 0 : val;
+  }
+
+  function fmtNumHtml(val, decimals = 3) {
+    const v = cleanZero(val);
+    if (v === 0) return '0';
+    const absV = Math.abs(v);
+    if (absV >= 1e6 || absV < 1e-3) {
+      return SolutionBuilder.fmtSciHtml(v, 3);
+    }
+    return v.toFixed(decimals);
+  }
+
+  function fmtDeflHtml(valLenUnit, sol, useMagnitude = false) {
+    const disp = sol.display;
+    const raw = useMagnitude ? Math.abs(valLenUnit) : valLenUnit;
+    const scaled = cleanZero(raw * disp.deflScale);
+    if (scaled === 0) {
+      return disp.isConstantEI ? '0' : `0 ${disp.deflShortUnit}`;
+    }
+    const decimals = !disp.isConstantEI && (disp.deflUnit === 'm' || disp.deflUnit === 'ft') ? 5 : 3;
+    const numHtml = fmtNumHtml(scaled, decimals);
+    return disp.isConstantEI ? `${numHtml} / EI` : `${numHtml} ${disp.deflShortUnit}`;
+  }
+
+  function fmtSlopeHtml(valRad, sol) {
+    const disp = sol.display;
+    const scaled = cleanZero(valRad * disp.slopeScale);
+    if (scaled === 0) {
+      return disp.isConstantEI ? '0' : `0 ${disp.slopeUnitLabel}`;
+    }
+    const numHtml = fmtNumHtml(scaled, 3);
+    return disp.isConstantEI ? `${numHtml} / EI` : `${numHtml} ${disp.slopeUnitLabel}`;
   }
 
   function renderLatex(tex, displayMode = true) {
@@ -204,25 +278,101 @@
     return finalHtml;
   }
 
-  function fmtDefl(valMeters, sol) {
-    const disp = sol.display;
-    const scaled = valMeters * disp.deflScale;
-    const absS = Math.abs(scaled);
-    const numStr =
-      absS > 0 && absS < 0.001
-        ? scaled.toExponential(3)
-        : disp.deflUnit === 'm' && !disp.isConstantEI
-          ? scaled.toFixed(5)
-          : scaled.toFixed(3);
-    return disp.isConstantEI ? `${numStr} / EI` : `${numStr} ${disp.deflShortUnit}`;
-  }
+  // =========================================================================
+  // Unit System Sync (SI Metric <-> English US)
+  // =========================================================================
+  function syncUnitSystemUI(resetDeflUnit = true) {
+    const U = getActiveUnits();
 
-  function fmtSlope(valRad, sol) {
-    const disp = sol.display;
-    const scaled = valRad * disp.slopeScale;
-    const absS = Math.abs(scaled);
-    const numStr = absS > 0 && absS < 0.001 ? scaled.toExponential(2) : scaled.toFixed(3);
-    return disp.isConstantEI ? `${numStr} / EI` : `${numStr} ${disp.slopeUnitLabel}`;
+    $('unitSystemPills').querySelectorAll('.unit-pill').forEach((b) => {
+      b.classList.toggle('active', b.dataset.unitSys === state.unitSystem);
+    });
+    $('usForceUnitGroup').classList.toggle('hidden', !U.isUS);
+    $('usForcePills').querySelectorAll('.unit-pill').forEach((b) => {
+      b.classList.toggle('active', b.dataset.usForce === state.usForceUnit);
+    });
+
+    // Update form labels & placeholders
+    $('beamLengthLabel').textContent = `Length L (${U.length})`;
+    $('beamLength').placeholder = U.isUS ? 'e.g. 20' : 'e.g. 6';
+    $('supportAXLabel').textContent = `Pin Position x_A (${U.length})`;
+    $('supportBXLabel').textContent = `Roller Position x_B (${U.length})`;
+    $('youngsELabel').textContent = `Modulus E (${U.eUnit})`;
+    $('youngsE').placeholder = U.isUS ? 'e.g. 29000' : 'e.g. 200';
+    $('queryXLabel').textContent = `Check Point x (${U.length})`;
+    $('queryXInput').placeholder = U.isUS ? 'e.g. 10' : 'e.g. 3';
+    $('loadBLabel').textContent = `End Position b (${U.length})`;
+    $('loadB').placeholder = U.isUS ? 'e.g. 20' : 'e.g. 6';
+    $('loadW2Label').textContent = `End Intensity w₂ (${U.dist})`;
+    $('pointSolutionXUnit').textContent = U.length;
+
+    // Update Material Preset dropdown values for SI (GPa) vs English (ksi)
+    const matSel = $('materialPreset');
+    const prevMat = matSel.value;
+    if (U.isUS) {
+      matSel.innerHTML = `
+        <option value="">Select material...</option>
+        <option value="29000">Steel (29,000 ksi)</option>
+        <option value="10000">Aluminum (10,000 ksi)</option>
+        <option value="4000">Concrete (4,000 ksi)</option>
+        <option value="1600">Timber (1,600 ksi)</option>
+        <option value="constant_ei">Constant EI (Symbolic)</option>
+        <option value="custom">Custom E...</option>`;
+    } else {
+      matSel.innerHTML = `
+        <option value="">Select material...</option>
+        <option value="200">Steel (200 GPa)</option>
+        <option value="69">Aluminum (69 GPa)</option>
+        <option value="28">Concrete (28 GPa)</option>
+        <option value="11">Timber (11 GPa)</option>
+        <option value="constant_ei">Constant EI (Symbolic)</option>
+        <option value="custom">Custom E...</option>`;
+    }
+    if (state.constantEI) {
+      matSel.value = 'constant_ei';
+    } else if (prevMat === 'custom') {
+      matSel.value = 'custom';
+    } else if (U.isUS && ['200', '69', '28', '11'].includes(prevMat)) {
+      const map = { '200': '29000', '69': '10000', '28': '4000', '11': '1600' };
+      matSel.value = map[prevMat];
+      $('youngsE').value = map[prevMat];
+    } else if (!U.isUS && ['29000', '10000', '4000', '1600'].includes(prevMat)) {
+      const map = { '29000': '200', '10000': '69', '4000': '28', '1600': '11' };
+      matSel.value = map[prevMat];
+      $('youngsE').value = map[prevMat];
+    }
+
+    // Update Deflection Unit Pills (SI: mm|cm|m  |  US: in|ft)
+    const pillsWrap = $('deflUnitPills');
+    if (U.isUS) {
+      if (resetDeflUnit || !['in', 'ft'].includes(state.deflUnit)) state.deflUnit = 'in';
+      pillsWrap.innerHTML = `
+        <button class="unit-pill ${state.deflUnit === 'in' ? 'active' : ''}" data-defl-unit="in" type="button">in</button>
+        <button class="unit-pill ${state.deflUnit === 'ft' ? 'active' : ''}" data-defl-unit="ft" type="button">ft</button>`;
+    } else {
+      if (resetDeflUnit || !['mm', 'cm', 'm'].includes(state.deflUnit)) state.deflUnit = 'mm';
+      pillsWrap.innerHTML = `
+        <button class="unit-pill ${state.deflUnit === 'mm' ? 'active' : ''}" data-defl-unit="mm" type="button">mm</button>
+        <button class="unit-pill ${state.deflUnit === 'cm' ? 'active' : ''}" data-defl-unit="cm" type="button">cm</button>
+        <button class="unit-pill ${state.deflUnit === 'm' ? 'active' : ''}" data-defl-unit="m" type="button">m</button>`;
+    }
+    pillsWrap.querySelectorAll('.unit-pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        pillsWrap.querySelectorAll('.unit-pill').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.deflUnit = btn.dataset.deflUnit;
+        if (state.solution) recalculate(true);
+      });
+    });
+
+    // Update custom I default unit cleanly when switching systems
+    if (resetDeflUnit) {
+      state.section.customIUnit = U.isUS ? 'in4' : 'm4';
+    }
+
+    updateLoadInputVisibility();
+    renderSectionInputs();
+    renderLoadsList();
   }
 
   // =========================================================================
@@ -251,34 +401,35 @@
   // Cross-Section UI Builder
   // =========================================================================
   function getEffectiveSection() {
+    const isUS = state.unitSystem === 'us';
     const s = state.section;
-    // Provide clean structural defaults behind the scenes if user leaves optional mm dimensions blank
     return {
       type: s.type || 'ibeam',
-      h: Number(s.h) > 0 ? Number(s.h) : 300,
-      bf: Number(s.bf) > 0 ? Number(s.bf) : 150,
-      tf: Number(s.tf) > 0 ? Number(s.tf) : 12,
-      tw: Number(s.tw) > 0 ? Number(s.tw) : 8,
-      b: Number(s.b) > 0 ? Number(s.b) : 200,
-      D: Number(s.D) > 0 ? Number(s.D) : 260,
-      t: Number(s.t) > 0 ? Number(s.t) : 12,
-      hw: Number(s.hw) > 0 ? Number(s.hw) : 260,
-      customI: Number(s.customI) > 0 ? Number(s.customI) : 8.5e-5,
-      customIUnit: s.customIUnit || 'm4'
+      h: Number(s.h) > 0 ? Number(s.h) : (isUS ? 12 : 300),
+      bf: Number(s.bf) > 0 ? Number(s.bf) : (isUS ? 6 : 150),
+      tf: Number(s.tf) > 0 ? Number(s.tf) : (isUS ? 0.5 : 12),
+      tw: Number(s.tw) > 0 ? Number(s.tw) : (isUS ? 0.35 : 8),
+      b: Number(s.b) > 0 ? Number(s.b) : (isUS ? 8 : 200),
+      D: Number(s.D) > 0 ? Number(s.D) : (isUS ? 10 : 260),
+      t: Number(s.t) > 0 ? Number(s.t) : (isUS ? 0.5 : 12),
+      hw: Number(s.hw) > 0 ? Number(s.hw) : (isUS ? 10 : 260),
+      customI: Number(s.customI) > 0 ? Number(s.customI) : (isUS ? 500 : 8.5e-5),
+      customIUnit: s.customIUnit || (isUS ? 'in4' : 'm4')
     };
   }
 
   function renderSectionInputs() {
+    const U = getActiveUnits();
     const type = $('sectionType').value;
     state.section.type = type;
     const container = $('sectionDimsContainer');
 
     if (type === 'custom') {
-      const unit = state.section.customIUnit || 'm4';
+      const unit = state.section.customIUnit || (U.isUS ? 'in4' : 'm4');
       container.innerHTML = `
         <div class="form-group">
           <label for="customIInput">Moment of Inertia I</label>
-          <input class="input-3d sec-dim-input" id="customIInput" data-sec-key="customI" type="number" step="any" min="0.000000000001" placeholder="e.g. 8000" value="${state.section.customI}" />
+          <input class="input-3d sec-dim-input" id="customIInput" data-sec-key="customI" type="number" step="any" min="0.000000000001" placeholder="${U.isUS ? 'e.g. 500' : 'e.g. 8000'}" value="${state.section.customI}" />
         </div>
         <div class="form-group">
           <label for="customIUnitSelect">Unit of I</label>
@@ -287,7 +438,8 @@
             <option value="cm4" ${unit === 'cm4' ? 'selected' : ''}>cm⁴ (×10⁻⁸ m⁴)</option>
             <option value="e6mm4" ${unit === 'e6mm4' ? 'selected' : ''}>×10⁶ mm⁴ (×10⁻⁶ m⁴)</option>
             <option value="mm4" ${unit === 'mm4' ? 'selected' : ''}>mm⁴ (×10⁻¹² m⁴)</option>
-            <option value="in4" ${unit === 'in4' ? 'selected' : ''}>in⁴ (Imperial)</option>
+            <option value="in4" ${unit === 'in4' ? 'selected' : ''}>in⁴ (English)</option>
+            <option value="ft4" ${unit === 'ft4' ? 'selected' : ''}>ft⁴ (English)</option>
           </select>
         </div>
         <div class="form-group span-2 hidden" id="hugeIWarning" style="background:rgba(166,87,128,0.14); border:1px solid rgba(166,87,128,0.4); border-radius:9px; padding:8px 10px; font-size:0.73rem; line-height:1.45;">
@@ -334,30 +486,31 @@
       return;
     }
 
+    const dU = U.dimUnit;
     let fields = [];
     if (type === 'ibeam') {
       fields = [
-        { key: 'h', label: 'Depth h (mm)', val: state.section.h, ph: '300' },
-        { key: 'bf', label: 'Flange b_f (mm)', val: state.section.bf, ph: '150' },
-        { key: 'tf', label: 'Flange t_f (mm)', val: state.section.tf, ph: '12' },
-        { key: 'tw', label: 'Web t_w (mm)', val: state.section.tw, ph: '8' }
+        { key: 'h', label: `Depth h (${dU})`, val: state.section.h, ph: U.isUS ? '12' : '300' },
+        { key: 'bf', label: `Flange b_f (${dU})`, val: state.section.bf, ph: U.isUS ? '6' : '150' },
+        { key: 'tf', label: `Flange t_f (${dU})`, val: state.section.tf, ph: U.isUS ? '0.5' : '12' },
+        { key: 'tw', label: `Web t_w (${dU})`, val: state.section.tw, ph: U.isUS ? '0.35' : '8' }
       ];
     } else if (type === 'rect') {
       fields = [
-        { key: 'b', label: 'Width b (mm)', val: state.section.b, ph: '200' },
-        { key: 'h', label: 'Height h (mm)', val: state.section.h, ph: '350' }
+        { key: 'b', label: `Width b (${dU})`, val: state.section.b, ph: U.isUS ? '8' : '200' },
+        { key: 'h', label: `Height h (${dU})`, val: state.section.h, ph: U.isUS ? '14' : '350' }
       ];
     } else if (type === 'tube') {
       fields = [
-        { key: 'D', label: 'Outer Dia D (mm)', val: state.section.D, ph: '260' },
-        { key: 't', label: 'Wall Thick t (mm)', val: state.section.t, ph: '12' }
+        { key: 'D', label: `Outer Dia D (${dU})`, val: state.section.D, ph: U.isUS ? '10' : '260' },
+        { key: 't', label: `Wall Thick t (${dU})`, val: state.section.t, ph: U.isUS ? '0.5' : '12' }
       ];
     } else if (type === 'tbeam') {
       fields = [
-        { key: 'bf', label: 'Flange b_f (mm)', val: state.section.bf, ph: '280' },
-        { key: 'tf', label: 'Flange t_f (mm)', val: state.section.tf, ph: '25' },
-        { key: 'hw', label: 'Web h_w (mm)', val: state.section.hw, ph: '280' },
-        { key: 'tw', label: 'Web t_w (mm)', val: state.section.tw, ph: '35' }
+        { key: 'bf', label: `Flange b_f (${dU})`, val: state.section.bf, ph: U.isUS ? '10' : '280' },
+        { key: 'tf', label: `Flange t_f (${dU})`, val: state.section.tf, ph: U.isUS ? '1' : '25' },
+        { key: 'hw', label: `Web h_w (${dU})`, val: state.section.hw, ph: U.isUS ? '10' : '280' },
+        { key: 'tw', label: `Web t_w (${dU})`, val: state.section.tw, ph: U.isUS ? '1.25' : '35' }
       ];
     }
 
@@ -366,7 +519,7 @@
         (f) => `
       <div class="form-group">
         <label>${f.label}</label>
-        <input class="input-3d sec-dim-input" data-sec-key="${f.key}" type="number" step="1" min="1" placeholder="e.g. ${f.ph}" value="${f.val}" />
+        <input class="input-3d sec-dim-input" data-sec-key="${f.key}" type="number" step="any" min="0.01" placeholder="e.g. ${f.ph}" value="${f.val}" />
       </div>`
       )
       .join('');
@@ -383,6 +536,7 @@
   }
 
   function updateSectionBadge() {
+    const U = getActiveUnits();
     if (state.constantEI) {
       $('computedILabel').textContent = 'EI = Constant (Symbolic)';
       $('computedEILabel').textContent = 'Answers in /EI';
@@ -400,16 +554,18 @@
       return;
     }
 
-    const props = Engine.computeSectionProperties(getEffectiveSection());
-    const EI = E_val * 1e6 * props.I;
+    const props = Engine.computeSectionProperties(getEffectiveSection(), state.unitSystem);
+    const EI = U.isUS
+      ? (E_val * (state.usForceUnit === 'lb' ? 1000 : 1) * props.I) / 144
+      : E_val * 1e6 * props.I;
     const shortType = { ibeam: 'I-Beam', rect: 'Rect', tube: 'Tube', tbeam: 'T-Beam', custom: 'Custom I' }[state.section.type] || 'Section';
-    $('computedILabel').textContent = `I = ${props.I.toExponential(3)} m⁴`;
-    $('computedEILabel').textContent = `EI = ${EI.toLocaleString(undefined, { maximumFractionDigits: 1 })} kN·m²`;
+    $('computedILabel').innerHTML = `I = ${fmtNumHtml(props.I, 3)} ${U.iBase}`;
+    $('computedEILabel').innerHTML = `EI = ${EI >= 1e6 ? SolutionBuilder.fmtSciHtml(EI, 3) : EI.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${U.ei}`;
     $('sectionSummaryMeta').textContent = `${shortType} ▾`;
 
     const warnBox = $('hugeIWarning');
     if (warnBox) {
-      const isHugeM4 = state.section.type === 'custom' && (state.section.customIUnit || 'm4') === 'm4' && Number(state.section.customI) >= 1;
+      const isHugeM4 = !U.isUS && state.section.type === 'custom' && (state.section.customIUnit || 'm4') === 'm4' && Number(state.section.customI) >= 1;
       warnBox.classList.toggle('hidden', !isHugeM4);
       if (isHugeM4) {
         $('hugeIWarningText').textContent = `${state.section.customI} m⁴ is extremely stiff (deflection ≈ 0). Did you mean cm⁴, ×10⁶ mm⁴, or mm⁴?`;
@@ -421,6 +577,7 @@
   // Load Builder UI
   // =========================================================================
   function updateLoadInputVisibility() {
+    const U = getActiveUnits();
     const t = state.activeLoadType;
     const magLabel = $('loadMagLabel');
     const aLabel = $('loadALabel');
@@ -428,29 +585,30 @@
     const w2Group = $('loadW2Group');
 
     if (t === 'Point') {
-      magLabel.textContent = 'Force P (kN, ↓+)';
-      aLabel.textContent = 'Position a (m)';
+      magLabel.textContent = `Force P (${U.force}, ↓+)`;
+      aLabel.textContent = `Position a (${U.length})`;
       bGroup.classList.add('hidden');
       w2Group.classList.add('hidden');
     } else if (t === 'UDL') {
-      magLabel.textContent = 'Intensity w (kN/m, ↓+)';
-      aLabel.textContent = 'Start a (m)';
+      magLabel.textContent = `Intensity w (${U.dist}, ↓+)`;
+      aLabel.textContent = `Start a (${U.length})`;
       bGroup.classList.remove('hidden');
       w2Group.classList.add('hidden');
     } else if (t === 'UVL') {
-      magLabel.textContent = 'Start w₁ (kN/m, ↓+)';
-      aLabel.textContent = 'Start a (m)';
+      magLabel.textContent = `Start w₁ (${U.dist}, ↓+)`;
+      aLabel.textContent = `Start a (${U.length})`;
       bGroup.classList.remove('hidden');
       w2Group.classList.remove('hidden');
     } else if (t === 'Moment') {
-      magLabel.textContent = 'Moment M₀ (kN·m, ↺+)';
-      aLabel.textContent = 'Position a (m)';
+      magLabel.textContent = `Moment M₀ (${U.moment}, ↺+)`;
+      aLabel.textContent = `Position a (${U.length})`;
       bGroup.classList.add('hidden');
       w2Group.classList.add('hidden');
     }
   }
 
   function renderLoadsList() {
+    const U = getActiveUnits();
     const list = $('loadsList');
     if (state.loads.length === 0) {
       list.innerHTML = `<div class="hint-text" style="text-align:center; padding:8px;">No loads added yet. Enter a load above or pick a ready-made example.</div>`;
@@ -459,10 +617,10 @@
     list.innerHTML = state.loads
       .map((ld, idx) => {
         let desc = '';
-        if (ld.type === 'Point') desc = `${ld.P} kN at x = ${ld.a} m`;
-        else if (ld.type === 'UDL') desc = `${ld.w} kN/m from ${ld.a} to ${ld.b} m`;
-        else if (ld.type === 'UVL') desc = `${ld.w1}→${ld.w2} kN/m (${ld.a}–${ld.b} m)`;
-        else if (ld.type === 'Moment') desc = `${ld.M} kN·m (${ld.M >= 0 ? 'CCW' : 'CW'}) at ${ld.a} m`;
+        if (ld.type === 'Point') desc = `${ld.P} ${U.force} at x = ${ld.a} ${U.length}`;
+        else if (ld.type === 'UDL') desc = `${ld.w} ${U.dist} from ${ld.a} to ${ld.b} ${U.length}`;
+        else if (ld.type === 'UVL') desc = `${ld.w1}→${ld.w2} ${U.dist} (${ld.a}–${ld.b} ${U.length})`;
+        else if (ld.type === 'Moment') desc = `${ld.M} ${U.moment} (${ld.M >= 0 ? 'CCW' : 'CW'}) at ${ld.a} ${U.length}`;
         return `
         <div class="load-item">
           <div><span class="load-item-tag">${ld.type}</span>${escapeHtml(desc)}</div>
@@ -482,8 +640,9 @@
   }
 
   function addLoadFromForm() {
+    const U = getActiveUnits();
     const L = Number($('beamLength').value);
-    if (!(L > 0)) return showToast('Enter Beam Length L (m) in Step 1 first.');
+    if (!(L > 0)) return showToast(`Enter Beam Length L (${U.length}) in Step 1 first.`);
     const t = state.activeLoadType;
     const rawMag = $('loadMag').value.trim();
     const rawA = $('loadA').value.trim();
@@ -492,7 +651,7 @@
     const mag = Number(rawMag);
     const a = Number(rawA);
     if (!isFinite(mag) || !isFinite(a)) return showToast('Enter valid numeric load values.');
-    if (a < 0 || a > L) return showToast(`Position a must be within [0, ${L}] m.`);
+    if (a < 0 || a > L) return showToast(`Position a must be within [0, ${L}] ${U.length}.`);
 
     if (t === 'Point') {
       state.loads.push({ type: 'Point', P: mag, a });
@@ -500,15 +659,15 @@
       state.loads.push({ type: 'Moment', M: mag, a });
     } else {
       const rawB = $('loadB').value.trim();
-      if (rawB === '') return showToast('Enter End Position b (m) for the distributed load.');
+      if (rawB === '') return showToast(`Enter End Position b (${U.length}) for the distributed load.`);
       const b = Number(rawB);
       if (!isFinite(b) || b <= a || b > L) {
-        return showToast(`Distributed load must satisfy 0 ≤ a < b ≤ ${L} m.`);
+        return showToast(`Distributed load must satisfy 0 ≤ a < b ≤ ${L} ${U.length}.`);
       }
       if (t === 'UDL') state.loads.push({ type: 'UDL', w: mag, a, b });
       else {
         const rawW2 = $('loadW2').value.trim();
-        if (rawW2 === '') return showToast('Enter End Intensity w₂ (kN/m) for UVL.');
+        if (rawW2 === '') return showToast(`Enter End Intensity w₂ (${U.dist}) for UVL.`);
         const w2 = Number(rawW2);
         if (!isFinite(w2)) return showToast('Enter a valid end intensity w₂.');
         state.loads.push({ type: 'UVL', w1: mag, w2, a, b });
@@ -516,7 +675,6 @@
     }
 
     renderLoadsList();
-    // Auto-calculate if Step 1 is complete
     if (isStep1Ready()) recalculate(true);
     else showToast(`${t} load added! Complete Step 1 & click Calculate Beam.`);
   }
@@ -572,12 +730,13 @@
   // Main Calculation & Rendering Pipeline
   // =========================================================================
   function recalculate(silentMissing = false) {
+    const U = getActiveUnits();
     const L = Number($('beamLength').value);
     const supportType = $('supportType').value;
     const E = Number($('youngsE').value);
 
     if (!(L > 0)) {
-      if (!silentMissing) showToast('Step 1: Enter Beam Length L (m) or pick a ready-made example.');
+      if (!silentMissing) showToast(`Step 1: Enter Beam Length L (${U.length}) or pick a ready-made example.`);
       return;
     }
     if (!supportType) {
@@ -598,6 +757,8 @@
       const queryX = rawQuery !== '' ? Math.max(0, Math.min(L, Number(rawQuery))) : L / 2;
 
       const config = {
+        unitSystem: state.unitSystem,
+        usForceUnit: state.usForceUnit,
         length: L,
         E: state.constantEI ? 1 : E,
         constantEI: state.constantEI,
@@ -613,7 +774,6 @@
       const sol = Engine.solveBeam(config);
       state.solution = sol;
 
-      // Sync probeX cleanly
       if (state.probeX <= 0 || state.probeX > L) {
         state.probeX = queryX;
       }
@@ -648,33 +808,35 @@
   }
 
   function updateKPIs(sol) {
+    const U = sol.units;
     const { deflection, moment, shear } = sol.extrema;
-    const dirWord = deflection.maxSigned < -1e-12 ? 'Downward' : deflection.maxSigned > 1e-12 ? 'Upward' : 'Zero';
+    const signedClean = cleanZero(deflection.maxSigned);
+    const dirWord = signedClean < 0 ? 'Downward' : signedClean > 0 ? 'Upward' : 'Zero';
 
-    $('kpiDefl').textContent = fmtDefl(deflection.maxSigned, sol);
+    // Show clean magnitude without redundant "-" since Downward / Upward is stated right below!
+    $('kpiDefl').innerHTML = fmtDeflHtml(deflection.maxSigned, sol, true);
     if (sol.display.isConstantEI) {
-      $('kpiDeflSub').textContent = `${dirWord} at x = ${deflection.maxX.toFixed(2)} m (kN·m³/EI)`;
+      $('kpiDeflSub').textContent = `${dirWord} at x = ${deflection.maxX.toFixed(2)} ${U.length} (${U.eiDefl}/EI)`;
     } else {
-      const L_mm = sol.input.L * 1000;
-      const ratio = deflection.maxAbs_mm > 1e-12 ? Math.round(L_mm / deflection.maxAbs_mm).toLocaleString() : '∞';
-      $('kpiDeflSub').textContent = `${dirWord} at x = ${deflection.maxX.toFixed(2)} m (L/${ratio})`;
+      const ratio = Math.abs(signedClean) > 1e-12 ? Math.round(sol.input.L / Math.abs(signedClean)).toLocaleString() : '∞';
+      $('kpiDeflSub').textContent = `${dirWord} at x = ${deflection.maxX.toFixed(2)} ${U.length} (L/${ratio})`;
     }
 
     $('deflUnitPills').classList.toggle('hidden', sol.display.isConstantEI);
     $('deflEiTag').classList.toggle('hidden', !sol.display.isConstantEI);
 
-    $('kpiMoment').textContent = `${moment.maxAbsSigned.toFixed(2)} kN·m`;
-    $('kpiMomentSub').textContent = `at x = ${moment.maxAbsX.toFixed(2)} m`;
+    $('kpiMoment').textContent = `${cleanZero(moment.maxAbsSigned).toFixed(2)} ${U.moment}`;
+    $('kpiMomentSub').textContent = `at x = ${moment.maxAbsX.toFixed(2)} ${U.length}`;
 
-    $('kpiShear').textContent = `${shear.maxAbsSigned.toFixed(2)} kN`;
-    $('kpiShearSub').textContent = `at x = ${shear.maxAbsX.toFixed(2)} m`;
+    $('kpiShear').textContent = `${cleanZero(shear.maxAbsSigned).toFixed(2)} ${U.force}`;
+    $('kpiShearSub').textContent = `at x = ${shear.maxAbsX.toFixed(2)} ${U.length}`;
 
     const r = sol.reactions;
     const rList = [];
-    if (sol.input.supports.some((s) => s.id === 'A')) rList.push(`R<sub>A</sub> = ${r.RA.toFixed(2)} kN`);
-    if (sol.input.supports.some((s) => s.id === 'B')) rList.push(`R<sub>B</sub> = ${r.RB.toFixed(2)} kN`);
-    if (Math.abs(r.MA) > 1e-4) rList.push(`M<sub>A</sub> = ${r.MA.toFixed(1)} kN·m`);
-    if (Math.abs(r.MB) > 1e-4) rList.push(`M<sub>B</sub> = ${r.MB.toFixed(1)} kN·m`);
+    if (sol.input.supports.some((s) => s.id === 'A')) rList.push(`R<sub>A</sub> = ${cleanZero(r.RA).toFixed(2)} ${U.force}`);
+    if (sol.input.supports.some((s) => s.id === 'B')) rList.push(`R<sub>B</sub> = ${cleanZero(r.RB).toFixed(2)} ${U.force}`);
+    if (Math.abs(r.MA) > 1e-4) rList.push(`M<sub>A</sub> = ${cleanZero(r.MA).toFixed(1)} ${U.moment}`);
+    if (Math.abs(r.MB) > 1e-4) rList.push(`M<sub>B</sub> = ${cleanZero(r.MB).toFixed(1)} ${U.moment}`);
     $('kpiReactions').innerHTML = rList.join(' &middot; ');
     $('kpiReactionsSub').textContent = 'Static equilibrium (determinate)';
   }
@@ -696,30 +858,32 @@
   function updateProbeReadout() {
     if (!state.solution) return;
     const sol = state.solution;
+    const U = sol.units;
     const st = sol.evalAt(state.probeX);
-    $('probeXVal').textContent = `${st.x.toFixed(2)} m`;
-    $('pointTabBadge').textContent = `x = ${st.x.toFixed(2)} m`;
+    $('probeXVal').textContent = `${st.x.toFixed(2)} ${U.length}`;
+    $('pointTabBadge').textContent = `x = ${st.x.toFixed(2)} ${U.length}`;
     $('probeMetrics').innerHTML = `
-      <span>V: <b>${st.V.toFixed(2)} kN</b></span>
-      <span>M: <b>${st.M.toFixed(2)} kN·m</b></span>
-      <span>θ: <b>${fmtSlope(st.theta, sol)}</b></span>
-      <span>δ: <b>${fmtDefl(st.y, sol)}</b></span>
+      <span>V: <b>${cleanZero(st.V).toFixed(2)} ${U.force}</b></span>
+      <span>M: <b>${cleanZero(st.M).toFixed(2)} ${U.moment}</b></span>
+      <span>θ: <b>${fmtSlopeHtml(st.theta, sol)}</b></span>
+      <span>δ: <b>${fmtDeflHtml(st.y, sol, false)}</b></span>
     `;
   }
 
   // =========================================================================
-  // Diagrams Renderer (Plain-English Titles & Subtitles)
+  // Diagrams Renderer (Plain-English Titles + Full SI / English Unit Support)
   // =========================================================================
   function renderActiveMethodDiagrams() {
     if (!state.solution) return;
     const sol = state.solution;
+    const U = sol.units;
     const grid = $('diagramsGrid');
     const method = state.activeMethod;
-    const commonOpts = { dark: state.dark, probeX: state.probeX };
+    const commonOpts = { dark: state.dark, probeX: state.probeX, xUnit: U.length };
     const disp = sol.display;
     const dUnit = disp.deflShortUnit;
     const sUnit = disp.slopeUnitLabel;
-    const dDecimals = !disp.isConstantEI && disp.deflUnit === 'm' ? 5 : 3;
+    const dDecimals = !disp.isConstantEI && (disp.deflUnit === 'm' || disp.deflUnit === 'ft') ? 5 : 3;
 
     if (method === 'double_integration') {
       grid.innerHTML = `
@@ -739,7 +903,7 @@
               <div class="diagram-title">Shear Force Along Beam</div>
               <div class="diagram-sub">Internal up-and-down slicing force, V(x)</div>
             </div>
-            <span class="diagram-tag">kN</span>
+            <span class="diagram-tag">${U.force}</span>
           </div>
           <canvas class="diagram-canvas" id="cvSfd"></canvas>
         </div>
@@ -749,7 +913,7 @@
               <div class="diagram-title">Bending Moment Along Beam</div>
               <div class="diagram-sub">Internal bending effort curving the beam, M(x)</div>
             </div>
-            <span class="diagram-tag">kN·m</span>
+            <span class="diagram-tag">${U.moment}</span>
           </div>
           <canvas class="diagram-canvas" id="cvBmd"></canvas>
         </div>
@@ -776,8 +940,8 @@
       `;
 
       registerCanvas($('cvFbd'), Diagrams.drawFBD($('cvFbd'), sol, commonOpts));
-      registerCanvas($('cvSfd'), Diagrams.drawCurveChart($('cvSfd'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...commonOpts, color: 'aurora', unit: 'kN', yLabel: 'Shear V (kN)' }));
-      registerCanvas($('cvBmd'), Diagrams.drawCurveChart($('cvBmd'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...commonOpts, color: 'wisteria', unit: 'kN·m', yLabel: 'Moment M (kN·m)' }));
+      registerCanvas($('cvSfd'), Diagrams.drawCurveChart($('cvSfd'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...commonOpts, color: 'aurora', unit: U.force, yLabel: `Shear V (${U.force})` }));
+      registerCanvas($('cvBmd'), Diagrams.drawCurveChart($('cvBmd'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...commonOpts, color: 'wisteria', unit: U.moment, yLabel: `Moment M (${U.moment})` }));
       registerCanvas($('cvSlope'), Diagrams.drawCurveChart($('cvSlope'), sol.arrays.x, sol.arrays.theta.map((t) => t * disp.slopeScale), sol.input.L, { ...commonOpts, color: 'aurora', unit: sUnit, decimals: 3, yLabel: `Slope θ (${sUnit})` }));
       registerCanvas($('cvDefl'), Diagrams.drawCurveChart($('cvDefl'), sol.arrays.x, sol.arrays.y.map((v) => v * disp.deflScale), sol.input.L, { ...commonOpts, color: 'mauve', unit: dUnit, decimals: dDecimals, yLabel: `Deflection y (${dUnit})` }));
     } else if (method === 'moment_area') {
@@ -808,7 +972,7 @@
               <div class="diagram-title">Shear Force Along Beam</div>
               <div class="diagram-sub">Internal slicing force, V(x)</div>
             </div>
-            <span class="diagram-tag">kN</span>
+            <span class="diagram-tag">${U.force}</span>
           </div>
           <canvas class="diagram-canvas" id="cvSfdMa"></canvas>
         </div>
@@ -818,7 +982,7 @@
               <div class="diagram-title">Bending Moment Along Beam</div>
               <div class="diagram-sub">Internal bending effort, M(x)</div>
             </div>
-            <span class="diagram-tag">kN·m</span>
+            <span class="diagram-tag">${U.moment}</span>
           </div>
           <canvas class="diagram-canvas" id="cvBmdMa"></canvas>
         </div>
@@ -826,8 +990,8 @@
 
       registerCanvas($('cvMaCurv'), Diagrams.drawMomentAreaCurvature($('cvMaCurv'), sol, commonOpts));
       registerCanvas($('cvMaTan'), Diagrams.drawMomentAreaTangent($('cvMaTan'), sol, commonOpts));
-      registerCanvas($('cvSfdMa'), Diagrams.drawCurveChart($('cvSfdMa'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...commonOpts, color: 'aurora', unit: 'kN', yLabel: 'Shear V (kN)' }));
-      registerCanvas($('cvBmdMa'), Diagrams.drawCurveChart($('cvBmdMa'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...commonOpts, color: 'wisteria', unit: 'kN·m', yLabel: 'Moment M (kN·m)' }));
+      registerCanvas($('cvSfdMa'), Diagrams.drawCurveChart($('cvSfdMa'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...commonOpts, color: 'aurora', unit: U.force, yLabel: `Shear V (${U.force})` }));
+      registerCanvas($('cvBmdMa'), Diagrams.drawCurveChart($('cvBmdMa'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...commonOpts, color: 'wisteria', unit: U.moment, yLabel: `Moment M (${U.moment})` }));
     } else if (method === 'conjugate_beam') {
       grid.innerHTML = `
         <div class="diagram-box full-span">
@@ -883,7 +1047,7 @@
               <div class="diagram-title">Shear Force Along Beam</div>
               <div class="diagram-sub">Internal slicing force, V(x)</div>
             </div>
-            <span class="diagram-tag">kN</span>
+            <span class="diagram-tag">${U.force}</span>
           </div>
           <canvas class="diagram-canvas" id="cvSfdCmp"></canvas>
         </div>
@@ -893,15 +1057,15 @@
               <div class="diagram-title">Bending Moment Along Beam</div>
               <div class="diagram-sub">Internal bending effort, M(x)</div>
             </div>
-            <span class="diagram-tag">kN·m</span>
+            <span class="diagram-tag">${U.moment}</span>
           </div>
           <canvas class="diagram-canvas" id="cvBmdCmp"></canvas>
         </div>
       `;
 
       registerCanvas($('cvCompare'), Diagrams.drawComparisonChart($('cvCompare'), sol, commonOpts));
-      registerCanvas($('cvSfdCmp'), Diagrams.drawCurveChart($('cvSfdCmp'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...commonOpts, color: 'aurora', unit: 'kN', yLabel: 'Shear V (kN)' }));
-      registerCanvas($('cvBmdCmp'), Diagrams.drawCurveChart($('cvBmdCmp'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...commonOpts, color: 'wisteria', unit: 'kN·m', yLabel: 'Moment M (kN·m)' }));
+      registerCanvas($('cvSfdCmp'), Diagrams.drawCurveChart($('cvSfdCmp'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...commonOpts, color: 'aurora', unit: U.force, yLabel: `Shear V (${U.force})` }));
+      registerCanvas($('cvBmdCmp'), Diagrams.drawCurveChart($('cvBmdCmp'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...commonOpts, color: 'wisteria', unit: U.moment, yLabel: `Moment M (${U.moment})` }));
     }
   }
 
@@ -921,26 +1085,27 @@
   function redrawCurrentCanvasesOnly() {
     if (!state.solution || state.activeWsTab !== 'diagrams') return;
     const sol = state.solution;
+    const U = sol.units;
     const disp = sol.display;
     const dUnit = disp.deflShortUnit;
     const sUnit = disp.slopeUnitLabel;
-    const dDecimals = !disp.isConstantEI && disp.deflUnit === 'm' ? 5 : 3;
-    const opts = { dark: state.dark, probeX: state.probeX };
+    const dDecimals = !disp.isConstantEI && (disp.deflUnit === 'm' || disp.deflUnit === 'ft') ? 5 : 3;
+    const opts = { dark: state.dark, probeX: state.probeX, xUnit: U.length };
     if ($('cvFbd')) Diagrams.drawFBD($('cvFbd'), sol, opts);
-    if ($('cvSfd')) Diagrams.drawCurveChart($('cvSfd'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...opts, color: 'aurora', unit: 'kN', yLabel: 'Shear V (kN)' });
-    if ($('cvBmd')) Diagrams.drawCurveChart($('cvBmd'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...opts, color: 'wisteria', unit: 'kN·m', yLabel: 'Moment M (kN·m)' });
+    if ($('cvSfd')) Diagrams.drawCurveChart($('cvSfd'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...opts, color: 'aurora', unit: U.force, yLabel: `Shear V (${U.force})` });
+    if ($('cvBmd')) Diagrams.drawCurveChart($('cvBmd'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...opts, color: 'wisteria', unit: U.moment, yLabel: `Moment M (${U.moment})` });
     if ($('cvSlope')) Diagrams.drawCurveChart($('cvSlope'), sol.arrays.x, sol.arrays.theta.map((t) => t * disp.slopeScale), sol.input.L, { ...opts, color: 'aurora', unit: sUnit, decimals: 3, yLabel: `Slope θ (${sUnit})` });
     if ($('cvDefl')) Diagrams.drawCurveChart($('cvDefl'), sol.arrays.x, sol.arrays.y.map((v) => v * disp.deflScale), sol.input.L, { ...opts, color: 'mauve', unit: dUnit, decimals: dDecimals, yLabel: `Deflection y (${dUnit})` });
     if ($('cvMaCurv')) Diagrams.drawMomentAreaCurvature($('cvMaCurv'), sol, opts);
     if ($('cvMaTan')) Diagrams.drawMomentAreaTangent($('cvMaTan'), sol, opts);
-    if ($('cvSfdMa')) Diagrams.drawCurveChart($('cvSfdMa'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...opts, color: 'aurora', unit: 'kN', yLabel: 'Shear V (kN)' });
-    if ($('cvBmdMa')) Diagrams.drawCurveChart($('cvBmdMa'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...opts, color: 'wisteria', unit: 'kN·m', yLabel: 'Moment M (kN·m)' });
+    if ($('cvSfdMa')) Diagrams.drawCurveChart($('cvSfdMa'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...opts, color: 'aurora', unit: U.force, yLabel: `Shear V (${U.force})` });
+    if ($('cvBmdMa')) Diagrams.drawCurveChart($('cvBmdMa'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...opts, color: 'wisteria', unit: U.moment, yLabel: `Moment M (${U.moment})` });
     if ($('cvConjSch')) Diagrams.drawConjugateBeamSchematic($('cvConjSch'), sol, opts);
     if ($('cvConjV')) Diagrams.drawCurveChart($('cvConjV'), sol.arrays.x, sol.arrays.thetaConj.map((v) => v * disp.slopeScale), sol.input.L, { ...opts, color: 'aurora', unit: sUnit, decimals: 3, yLabel: `V* = θ (${sUnit})` });
     if ($('cvConjM')) Diagrams.drawCurveChart($('cvConjM'), sol.arrays.x, sol.arrays.yConj_mm.map((v) => (v / 1000) * disp.deflScale), sol.input.L, { ...opts, color: 'wisteria', unit: dUnit, decimals: dDecimals, yLabel: `M* = y (${dUnit})` });
     if ($('cvCompare')) Diagrams.drawComparisonChart($('cvCompare'), sol, opts);
-    if ($('cvSfdCmp')) Diagrams.drawCurveChart($('cvSfdCmp'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...opts, color: 'aurora', unit: 'kN', yLabel: 'Shear V (kN)' });
-    if ($('cvBmdCmp')) Diagrams.drawCurveChart($('cvBmdCmp'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...opts, color: 'wisteria', unit: 'kN·m', yLabel: 'Moment M (kN·m)' });
+    if ($('cvSfdCmp')) Diagrams.drawCurveChart($('cvSfdCmp'), sol.arrays.x, sol.arrays.V, sol.input.L, { ...opts, color: 'aurora', unit: U.force, yLabel: `Shear V (${U.force})` });
+    if ($('cvBmdCmp')) Diagrams.drawCurveChart($('cvBmdCmp'), sol.arrays.x, sol.arrays.M, sol.input.L, { ...opts, color: 'wisteria', unit: U.moment, yLabel: `Moment M (${U.moment})` });
   }
 
   // =========================================================================
@@ -982,6 +1147,7 @@
   function renderMaxSolution() {
     if (!state.solution) return;
     const sol = state.solution;
+    const U = sol.units;
     const container = $('builtInSolutionMaxContainer');
     const method = state.activeMethod;
 
@@ -996,6 +1162,9 @@
     if (method === 'compare') {
       const cmp = sol.comparison;
       const dUnit = sol.display.deflShortUnit;
+      const dirWord = sol.extrema.deflection.maxSigned < -1e-10 ? '(Downward)' : sol.extrema.deflection.maxSigned > 1e-10 ? '(Upward)' : '';
+      const maErr = cleanZero((cmp.momentArea.maxError_mm / 1000) * sol.display.deflScale);
+      const cjErr = cleanZero((cmp.conjugateBeam.maxError_mm / 1000) * sol.display.deflScale);
       container.innerHTML = `
         <div class="step-card">
           <div class="step-card-head">
@@ -1009,28 +1178,28 @@
                 <tr>
                   <th>Method</th>
                   <th>Max Deflection δ_max (${dUnit})</th>
-                  <th>Location x_max (m)</th>
+                  <th>Location x_max (${U.length})</th>
                   <th>Difference</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td><strong>1. Double Integration</strong></td>
-                  <td>${fmtDefl(cmp.doubleIntegration.maxSigned_mm / 1000, sol)}</td>
-                  <td>${cmp.doubleIntegration.maxX.toFixed(4)} m</td>
+                  <td>${fmtDeflHtml(cmp.doubleIntegration.maxSigned_mm / 1000, sol, true)} ${dirWord}</td>
+                  <td>${cmp.doubleIntegration.maxX.toFixed(4)} ${U.length}</td>
                   <td>Exact Reference</td>
                 </tr>
                 <tr>
                   <td><strong>2. Moment-Area Method</strong></td>
-                  <td>${fmtDefl(cmp.momentArea.maxSigned_mm / 1000, sol)}</td>
-                  <td>${cmp.momentArea.maxX.toFixed(4)} m</td>
-                  <td>${((cmp.momentArea.maxError_mm / 1000) * sol.display.deflScale).toExponential(2)} ${dUnit}</td>
+                  <td>${fmtDeflHtml(cmp.momentArea.maxSigned_mm / 1000, sol, true)} ${dirWord}</td>
+                  <td>${cmp.momentArea.maxX.toFixed(4)} ${U.length}</td>
+                  <td>${maErr === 0 ? '0 (Exact)' : `${SolutionBuilder.fmtSciHtml(maErr, 2)} ${dUnit}`}</td>
                 </tr>
                 <tr>
                   <td><strong>3. Conjugate Beam Method</strong></td>
-                  <td>${fmtDefl(cmp.conjugateBeam.maxSigned_mm / 1000, sol)}</td>
-                  <td>${cmp.conjugateBeam.maxX.toFixed(4)} m</td>
-                  <td>${((cmp.conjugateBeam.maxError_mm / 1000) * sol.display.deflScale).toExponential(2)} ${dUnit}</td>
+                  <td>${fmtDeflHtml(cmp.conjugateBeam.maxSigned_mm / 1000, sol, true)} ${dirWord}</td>
+                  <td>${cmp.conjugateBeam.maxX.toFixed(4)} ${U.length}</td>
+                  <td>${cjErr === 0 ? '0 (Exact)' : `${SolutionBuilder.fmtSciHtml(cjErr, 2)} ${dUnit}`}</td>
                 </tr>
               </tbody>
             </table>
@@ -1049,20 +1218,21 @@
   }
 
   // =========================================================================
-  // TAB 3: SLOPE & DEFLECTION AT ANY SELECTED POINT x (SYNCED TO INSPECT POINT x!)
+  // TAB 3: SLOPE & DEFLECTION AT ANY SELECTED POINT x
   // =========================================================================
   function renderPointSolution() {
     if (!state.solution) return;
     const sol = state.solution;
+    const U = sol.units;
     const xP = state.probeX;
     const container = $('builtInSolutionPointContainer');
     const method = state.activeMethod;
 
     const titles = {
-      double_integration: `Slope & Deflection at x = ${xP.toFixed(2)} m — Double Integration Method`,
-      moment_area: `Slope & Deflection at x = ${xP.toFixed(2)} m — Moment-Area Method`,
-      conjugate_beam: `Slope & Deflection at x = ${xP.toFixed(2)} m — Conjugate Beam Method`,
-      compare: `Slope & Deflection at x = ${xP.toFixed(2)} m — All 3 Methods Compared`
+      double_integration: `Slope & Deflection at x = ${xP.toFixed(2)} ${U.length} — Double Integration Method`,
+      moment_area: `Slope & Deflection at x = ${xP.toFixed(2)} ${U.length} — Moment-Area Method`,
+      conjugate_beam: `Slope & Deflection at x = ${xP.toFixed(2)} ${U.length} — Conjugate Beam Method`,
+      compare: `Slope & Deflection at x = ${xP.toFixed(2)} ${U.length} — All 3 Methods Compared`
     };
     $('solutionPointTitle').textContent = titles[method] || titles.double_integration;
 
@@ -1073,37 +1243,37 @@
       container.innerHTML = `
         <div class="step-card">
           <div class="step-card-head">
-            <span class="step-title">Comparison at Selected Point x = ${xP.toFixed(3)} m</span>
+            <span class="step-title">Comparison at Selected Point x = ${xP.toFixed(3)} ${U.length}</span>
             <span class="step-badge">All 3 Methods Match</span>
           </div>
-          <p class="step-desc">Independent slope and deflection evaluation at x = ${xP.toFixed(3)} m across all three structural methods:</p>
+          <p class="step-desc">Independent slope and deflection evaluation at x = ${xP.toFixed(3)} ${U.length} across all three structural methods:</p>
           <div class="eng-table-wrap">
             <table class="eng-table">
               <thead>
                 <tr>
                   <th>Method</th>
-                  <th>Slope θ(${xP.toFixed(2)} m)</th>
-                  <th>Deflection y(${xP.toFixed(2)} m)</th>
-                  <th>Shear V / Moment M</th>
+                  <th>Slope θ(${xP.toFixed(2)} ${U.length})</th>
+                  <th>Deflection y(${xP.toFixed(2)} ${U.length})</th>
+                  <th>Internal Section Values</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td><strong>1. Double Integration</strong></td>
-                  <td>${fmtSlope(st.theta, sol)}</td>
-                  <td>${fmtDefl(st.y, sol)}</td>
-                  <td>V = ${st.V.toFixed(2)} kN · M = ${st.M.toFixed(2)} kN·m</td>
+                  <td>${fmtSlopeHtml(st.theta, sol)}</td>
+                  <td>${fmtDeflHtml(st.y, sol, false)}</td>
+                  <td>V = ${cleanZero(st.V).toFixed(2)} ${U.force} · M = ${cleanZero(st.M).toFixed(2)} ${U.moment}</td>
                 </tr>
                 <tr>
                   <td><strong>2. Moment-Area Method</strong></td>
-                  <td>${fmtSlope(ma.theta, sol)}</td>
-                  <td>${fmtDefl(ma.y, sol)}</td>
-                  <td>t = ${fmtDefl(ma.t_x_ref, sol)}</td>
+                  <td>${fmtSlopeHtml(ma.theta, sol)}</td>
+                  <td>${fmtDeflHtml(ma.y, sol, false)}</td>
+                  <td>t = ${fmtDeflHtml(ma.t_x_ref, sol, false)}</td>
                 </tr>
                 <tr>
                   <td><strong>3. Conjugate Beam Method</strong></td>
-                  <td>${fmtSlope(cj.V_star, sol)}</td>
-                  <td>${fmtDefl(cj.M_star, sol)}</td>
+                  <td>${fmtSlopeHtml(cj.V_star, sol)}</td>
+                  <td>${fmtDeflHtml(cj.M_star, sol, false)}</td>
                   <td>V* = θ · M* = y</td>
                 </tr>
               </tbody>
@@ -1200,7 +1370,7 @@
         $('aiVerifyBanner').innerHTML = `
           <div class="ai-verify-badge ${v.matched ? 'pass' : 'warn'}">
             ${v.matched ? '✓ Independent AI Cross-Check PASSED' : '⚠ Independent AI Deviation Detected'} —
-            AI: ${v.aiDefl.toFixed(4)} mm vs. Solver: ${v.engineDefl.toFixed(4)} mm (Δ = ${v.deflErrPct.toFixed(2)}%)
+            AI: ${v.aiDefl.toFixed(4)} vs. Solver: ${v.engineDefl.toFixed(4)} (Δ = ${v.deflErrPct.toFixed(2)}%)
           </div>`;
       } else {
         $('aiVerifyBanner').innerHTML = `
@@ -1272,17 +1442,22 @@
   function closeGuideModal() { $('guideModalBackdrop').classList.remove('open'); }
 
   // =========================================================================
-  // Preset Loader (Auto-populates all fields cleanly!)
+  // Preset Loader (Auto-populates SI or English example cleanly!)
   // =========================================================================
   function loadPreset(key) {
     const p = PRESETS[key];
     if (!p) return;
+    state.unitSystem = p.unitSystem || 'si';
+    state.usForceUnit = p.usForceUnit || 'kip';
     state.constantEI = false;
     $('constantEICheckbox').checked = false;
+    syncUnitSystemUI(true);
+
     $('presetSelect').value = key;
     $('beamLength').value = p.length;
     $('youngsE').value = p.E;
-    $('materialPreset').value = ['200', '69', '28', '11'].includes(String(p.E)) ? String(p.E) : 'custom';
+    const matValues = state.unitSystem === 'us' ? ['29000', '10000', '4000', '1600'] : ['200', '69', '28', '11'];
+    $('materialPreset').value = matValues.includes(String(p.E)) ? String(p.E) : 'custom';
     $('supportType').value = p.supportType;
     $('queryXInput').value = p.queryX;
     if (p.supportA !== undefined) $('supportAX').value = p.supportA;
@@ -1340,10 +1515,28 @@
   function init() {
     viewer3d = new Viewer3D($('viewer3dContainer'));
 
-    renderSectionInputs();
-    updateLoadInputVisibility();
-    renderLoadsList();
+    syncUnitSystemUI(true);
     updateAiStatusBadge();
+
+    // Unit System Toggle (SI Metric vs English US)
+    $('unitSystemPills').querySelectorAll('.unit-pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const nextSys = btn.dataset.unitSys;
+        if (nextSys === state.unitSystem) return;
+        state.unitSystem = nextSys;
+        syncUnitSystemUI(true);
+        if (state.solution) recalculate(true);
+        showToast(`Switched to ${nextSys === 'us' ? 'English (US: ft, kip/lb, ksi, in)' : 'SI Metric (m, kN, GPa, mm)'} units`);
+      });
+    });
+
+    $('usForcePills').querySelectorAll('.unit-pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.usForceUnit = btn.dataset.usForce;
+        syncUnitSystemUI(false);
+        if (state.solution) recalculate(true);
+      });
+    });
 
     // Example Preset Dropdown & Empty-State Starter Button
     $('presetSelect').addEventListener('change', (e) => {
@@ -1397,19 +1590,11 @@
         $('materialPreset').value = 'constant_ei';
       } else {
         const curE = String(Number($('youngsE').value) || '');
-        $('materialPreset').value = ['200', '69', '28', '11'].includes(curE) ? curE : curE ? 'custom' : '';
+        const validMats = state.unitSystem === 'us' ? ['29000', '10000', '4000', '1600'] : ['200', '69', '28', '11'];
+        $('materialPreset').value = validMats.includes(curE) ? curE : curE ? 'custom' : '';
       }
       updateSectionBadge();
       if (state.solution) recalculate(true);
-    });
-
-    $('deflUnitPills').querySelectorAll('.unit-pill').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        $('deflUnitPills').querySelectorAll('.unit-pill').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.deflUnit = btn.dataset.deflUnit;
-        if (state.solution) recalculate(true);
-      });
     });
 
     $('youngsE').addEventListener('input', updateSectionBadge);
@@ -1549,7 +1734,7 @@
       showToast(`Connected ${AIService.PROVIDERS[state.aiSettings.provider]?.name}`);
     });
 
-    // Theme & Print (synced with Terms & Guide page via localStorage)
+    // Theme & Print
     try {
       if (localStorage.getItem('beamstudio_theme') === 'dark') {
         state.dark = true;

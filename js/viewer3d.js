@@ -738,6 +738,7 @@
 
     _addRealLoads3D(sol, depthVis, deflScale, animFactor) {
       const THREE = global.THREE;
+      const U = sol.units || { length: 'm', force: 'kN', dist: 'kN/m', moment: 'kN·m' };
       const loadColor = PALETTE.coralAccent;
       const momentColor = PALETTE.wisteria;
 
@@ -757,7 +758,7 @@
           const len = 1.45 * (0.4 + 0.6 * animFactor);
           this._addArrow3D(xSc, yTip, len, dirDown ? -1 : 1, loadColor);
 
-          const sp = createLabelSprite(`${ld.P} kN`, 'rgba(185, 95, 137, 0.94)', '#f3eef8', THREE);
+          const sp = createLabelSprite(`${ld.P} ${U.force}`, 'rgba(185, 95, 137, 0.94)', '#f3eef8', THREE);
           sp.position.set(xSc, dirDown ? yTip + len + 0.34 : yTip - len - 0.34, 0);
           this.beamGroup.add(sp);
         } else if (ld.type === 'UDL' || ld.type === 'UVL') {
@@ -817,7 +818,7 @@
 
           const midX = 0.5 * (a + b);
           const midY = sol.evalAt(midX).y * deflScale + depthVis * 0.52 + 1.48;
-          const lbl = ld.type === 'UDL' ? `${ld.w} kN/m` : `${ld.w1}→${ld.w2} kN/m`;
+          const lbl = ld.type === 'UDL' ? `${ld.w} ${U.dist}` : `${ld.w1}→${ld.w2} ${U.dist}`;
           const sp = createLabelSprite(lbl, 'rgba(185, 95, 137, 0.92)', '#f3eef8', THREE);
           sp.position.set(this._xToScene(midX), midY, 0);
           this.beamGroup.add(sp);
@@ -843,7 +844,7 @@
           cone.rotation.z = tipAngle;
           this.beamGroup.add(cone);
 
-          const sp = createLabelSprite(`${ld.M} kN·m ${ld.M >= 0 ? '↺' : '↻'}`, 'rgba(110,90,136,0.95)', '#f3eef8', THREE);
+          const sp = createLabelSprite(`${ld.M} ${U.moment} ${ld.M >= 0 ? '↺' : '↻'}`, 'rgba(110,90,136,0.95)', '#f3eef8', THREE);
           sp.position.set(xSc, yBeam + 1.1, 0);
           this.beamGroup.add(sp);
         }
@@ -901,6 +902,7 @@
       this.beamGroup.add(new THREE.Mesh(geom, mat));
 
       // Centroid Markers for each Moment-Area Region
+      const lenU = sol.units ? sol.units.length : 'm';
       for (const reg of sol.momentArea.regions) {
         if (Math.abs(reg.area) < 1e-12) continue;
         const cx = this._xToScene(reg.xBar);
@@ -913,7 +915,7 @@
         dot.position.set(cx, cy, 0.08);
         this.beamGroup.add(dot);
 
-        const sp = createLabelSprite(`${reg.id} (x̄=${reg.xBar.toFixed(2)}m)`, 'rgba(110,90,136,0.92)', '#f3eef8', THREE);
+        const sp = createLabelSprite(`${reg.id} (x̄=${reg.xBar.toFixed(2)}${lenU})`, 'rgba(110,90,136,0.92)', '#f3eef8', THREE);
         sp.position.set(cx, cy + (kAtBar >= 0 ? 0.52 : -0.52), 0.15);
         this.beamGroup.add(sp);
       }
@@ -966,6 +968,7 @@
 
     _addDimensionAxis3D(L) {
       const THREE = global.THREE;
+      const lenU = this.solution && this.solution.units ? this.solution.units.length : 'm';
       const yAxis = -2.1;
       const pts = [new THREE.Vector3(-5, yAxis, 0.9), new THREE.Vector3(5, yAxis, 0.9)];
       const line = new THREE.Line(
@@ -974,7 +977,7 @@
       );
       this.beamGroup.add(line);
 
-      const sp = createLabelSprite(`L = ${L} m`, 'rgba(110,90,136,0.85)', '#f3eef8', THREE);
+      const sp = createLabelSprite(`L = ${L} ${lenU}`, 'rgba(110,90,136,0.85)', '#f3eef8', THREE);
       sp.position.set(0, yAxis + 0.05, 1.3);
       sp.scale.set(1.2, 0.34, 1);
       this.beamGroup.add(sp);

@@ -234,12 +234,13 @@
       if (ld.type === 'UVL') maxW = Math.max(maxW, Math.abs(ld.w1), Math.abs(ld.w2));
     }
 
+    const U = sol.units || { length: 'm', force: 'kN', dist: 'kN/m', moment: 'kN·m' };
     for (const ld of sol.input.loads) {
       if (ld.type === 'Point') {
         const sx = toX(ld.a);
         const down = ld.P >= 0;
         drawArrow2D(ctx, sx, down ? beamY - 58 : beamY + 58, sx, down ? beamY - 6 : beamY + 6, C.mauve, 2.4, 8);
-        drawRoundedPill(ctx, sx, down ? beamY - 70 : beamY + 70, `${ld.P} kN`, C.pillBg, C.mauve, C.mauve);
+        drawRoundedPill(ctx, sx, down ? beamY - 70 : beamY + 70, `${ld.P} ${U.force}`, C.pillBg, C.mauve, C.mauve);
       } else if (ld.type === 'UDL' || ld.type === 'UVL') {
         const x1 = toX(ld.a);
         const x2 = toX(ld.b);
@@ -277,7 +278,7 @@
             drawArrow2D(ctx, ax, beamY + dir * (ah + 8), ax, beamY + dir * 6, C.mauve, 1.4, 5);
           }
         }
-        const lbl = ld.type === 'UDL' ? `${ld.w} kN/m` : `${ld.w1}→${ld.w2} kN/m`;
+        const lbl = ld.type === 'UDL' ? `${ld.w} ${U.dist}` : `${ld.w1}→${ld.w2} ${U.dist}`;
         drawRoundedPill(ctx, 0.5 * (x1 + x2), beamY - Math.max(h1, h2) - 22, lbl, C.pillBg, C.mauve, C.mauve);
       } else if (ld.type === 'Moment') {
         const sx = toX(ld.a);
@@ -288,7 +289,7 @@
         ctx.arc(sx, beamY, 18, -Math.PI * 0.75, Math.PI * 0.65);
         ctx.stroke();
         ctx.restore();
-        drawRoundedPill(ctx, sx, beamY - 32, `${ld.M} kN·m ${ld.M >= 0 ? '↺' : '↻'}`, C.pillBg, C.wisteria, C.wisteria);
+        drawRoundedPill(ctx, sx, beamY - 32, `${ld.M} ${U.moment} ${ld.M >= 0 ? '↺' : '↻'}`, C.pillBg, C.wisteria, C.wisteria);
       }
     }
 
@@ -297,7 +298,7 @@
       const sx = toX(sup.x);
       const R = sup.id === 'A' ? sol.reactions.RA : sol.reactions.RB;
       const M = sup.id === 'A' ? sol.reactions.MA : sol.reactions.MB;
-      let txt = `R${sup.id}=${R.toFixed(2)} kN`;
+      let txt = `R${sup.id}=${R.toFixed(2)} ${U.force}`;
       if (sup.type === 'fixed' && Math.abs(M) > 1e-4) {
         txt += ` | M${sup.id}=${M.toFixed(1)}`;
       }
@@ -356,6 +357,15 @@
     ctx.font = '500 10px "Inter", sans-serif';
     ctx.fillStyle = C.muted;
 
+    const xUnit = opts.xUnit || 'm';
+    const fmtTick = (val) => {
+      if (Math.abs(val) < 1e-10) return '0';
+      if (Math.abs(val) >= 10000 || Math.abs(val) < 0.01) {
+        return BeamStudio.SolutionBuilder ? BeamStudio.SolutionBuilder.fmtSciUnicode(val, 1) : val.toExponential(1);
+      }
+      return val.toFixed(2);
+    };
+
     for (let i = 0; i <= 4; i++) {
       const val = yLo + ((yHi - yLo) * i) / 4;
       const gy = toY(val);
@@ -365,8 +375,7 @@
       ctx.stroke();
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      const lbl = Math.abs(val) < 1e-9 ? '0' : Math.abs(val) >= 1000 || (Math.abs(val) > 0 && Math.abs(val) < 0.01) ? val.toExponential(1) : val.toFixed(2);
-      ctx.fillText(lbl, pad.l - 8, gy);
+      ctx.fillText(fmtTick(val), pad.l - 8, gy);
     }
 
     for (let i = 0; i <= 6; i++) {
@@ -378,7 +387,7 @@
       ctx.stroke();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(`${xv.toFixed(1)}m`, gx, h - pad.b + 7);
+      ctx.fillText(`${xv.toFixed(1)}${xUnit}`, gx, h - pad.b + 7);
     }
 
     // Zero baseline
@@ -428,7 +437,13 @@
       ctx.beginPath();
       ctx.arc(px, py, 4.5, 0, Math.PI * 2);
       ctx.fill();
-      const valTxt = `${yArr[peakIdx].toFixed(opts.decimals ?? 2)} ${opts.unit || ''} @ ${xArr[peakIdx].toFixed(2)}m`;
+      const peakValStr =
+        Math.abs(yArr[peakIdx]) < 1e-10
+          ? '0'
+          : Math.abs(yArr[peakIdx]) < 0.001 && BeamStudio.SolutionBuilder
+            ? BeamStudio.SolutionBuilder.fmtSciUnicode(yArr[peakIdx], 2)
+            : yArr[peakIdx].toFixed(opts.decimals ?? 2);
+      const valTxt = `${peakValStr} ${opts.unit || ''} @ ${xArr[peakIdx].toFixed(2)}${xUnit}`;
       const align = xArr[peakIdx] < L * 0.2 ? 'left' : xArr[peakIdx] > L * 0.8 ? 'right' : 'center';
       const labelY = py < pad.t + 26 ? py + 18 : py - 18;
       drawRoundedPill(ctx, px, labelY, valTxt, C.pillBg, strokeCol, strokeCol, align);
@@ -505,6 +520,7 @@
     const toY = (y) => pad.t + ((yHi - y) / (yHi - yLo)) * plotH;
     const zeroY = toY(0);
 
+    const lenU = sol.units ? sol.units.length : 'm';
     // Subtle grid
     ctx.strokeStyle = C.grid;
     ctx.lineWidth = 1;
@@ -518,7 +534,7 @@
       ctx.fillStyle = C.muted;
       ctx.font = '500 10px "Inter", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(`${xv.toFixed(1)}m`, gx, h - pad.b + 14);
+      ctx.fillText(`${xv.toFixed(1)}${lenU}`, gx, h - pad.b + 14);
     }
 
     // Distinct alternating fills from our Starlight/Opaline/Aurora/Wisteria palette for each region A_i
@@ -574,7 +590,7 @@
         ctx.stroke();
 
         const lblY = reg.sign >= 0 ? Math.max(pad.t + 14, toY(kAtBar) - 14) : Math.min(h - pad.b - 14, toY(kAtBar) + 14);
-        drawRoundedPill(ctx, cx, lblY, `${reg.id} (x̄=${reg.xBar.toFixed(2)}m)`, C.pillBg, C.wisteria, C.text);
+        drawRoundedPill(ctx, cx, lblY, `${reg.id} (x̄=${reg.xBar.toFixed(2)}${lenU})`, C.pillBg, C.wisteria, C.text);
       }
     });
 
@@ -650,6 +666,7 @@
     const toY = (y) => pad.t + ((yHi - y) / (yHi - yLo)) * plotH;
     const zeroY = toY(0);
 
+    const lenU = sol.units ? sol.units.length : 'm';
     // Grid
     ctx.strokeStyle = C.grid;
     ctx.lineWidth = 1;
@@ -663,7 +680,7 @@
       ctx.fillStyle = C.muted;
       ctx.font = '500 10px "Inter", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(`${xv.toFixed(1)}m`, gx, h - pad.b + 14);
+      ctx.fillText(`${xv.toFixed(1)}${lenU}`, gx, h - pad.b + 14);
     }
 
     // Undeformed beam baseline
@@ -704,7 +721,7 @@
     ctx.beginPath();
     ctx.arc(rx, ry, 5, 0, Math.PI * 2);
     ctx.fill();
-    drawRoundedPill(ctx, rx, ry - 18, `Ref Tangent (${refX.toFixed(1)}m)`, C.pillBg, C.aurora, C.aurora, refX < L * 0.2 ? 'left' : 'right');
+    drawRoundedPill(ctx, rx, ry - 18, `Ref Tangent (${refX.toFixed(1)}${lenU})`, C.pillBg, C.aurora, C.aurora, refX < L * 0.2 ? 'left' : 'right');
 
     // Vertical Tangential Deviation Arrow t_{target / ref}
     const tx = toX(targetX);
